@@ -458,3 +458,170 @@
     institution = {Runtime Verification},
     urldate = {2024-03-07}
 }
+
+@article{lawson1979blas,
+  author  = {Lawson, C. L. and Hanson, R. J. and Kincaid, D. R. and Krogh, F. T.},
+  title   = {Basic Linear Algebra Subprograms for {Fortran} Usage},
+  journal = {ACM Transactions on Mathematical Software},
+  volume  = {5},
+  number  = {3},
+  pages   = {308--323},
+  year    = {1979},
+  doi     = {10.1145/355841.355847}
+}
+
+@inproceedings{demmel2013reproducible,
+  author    = {Demmel, James and Nguyen, Hong Diep},
+  title     = {Fast Reproducible Floating-Point Summation},
+  booktitle = {2013 IEEE 21st Symposium on Computer Arithmetic (ARITH)},
+  pages     = {163--172},
+  year      = {2013},
+  doi       = {10.1109/ARITH.2013.9},
+  note      = {ReproBLAS project}
+}
+
+@article{agullo2009plasma,
+  author  = {Agullo, Emmanuel and Demmel, Jim and Dongarra, Jack and Hadri, Bilel
+             and Kurzak, Jakub and Langou, Julien and Ltaief, Hatem
+             and Luszczek, Piotr and Tomov, Stanimire},
+  title   = {Numerical Linear Algebra on Emerging Architectures:
+             The {PLASMA} and {MAGMA} Projects},
+  journal = {Journal of Physics: Conference Series},
+  volume  = {180},
+  pages   = {012037},
+  year    = {2009},
+  doi     = {10.1088/1742-6596/180/1/012037}
+}
+
+@manual{ieee754-2019,
+  title        = {{IEEE} Standard for Floating-Point Arithmetic},
+  organization = {IEEE},
+  number       = {IEEE Std 754-2019},
+  year         = {2019},
+  doi          = {10.1109/IEEESTD.2019.8766229}
+}
+
+@manual{positstd2022,
+  title        = {Standard for Posit Arithmetic (2022)},
+  organization = {Posit Working Group},
+  year         = {2022},
+  url          = {https://posithub.org/docs/posit_standard-2.pdf},
+  note         = {es = 2 fixed across all widths}
+}
+
+@article{gustafson2017posit,
+  author  = {Gustafson, John L. and Yonemoto, Isaac},
+  title   = {Beating Floating Point at Its Own Game: Posit Arithmetic},
+  journal = {Supercomputing Frontiers and Innovations},
+  volume  = {4},
+  number  = {2},
+  pages   = {71--86},
+  year    = {2017},
+  doi     = {10.14529/jsfi170206}
+}
+
+@misc{hauser_softfloat,
+  author       = {Hauser, John R.},
+  title        = {{Berkeley SoftFloat}, Release 3e},
+  howpublished = {\url{http://www.jhauser.us/arithmetic/SoftFloat.html}},
+  year         = {2018}
+}
+
+@misc{leong_softposit,
+  author       = {Leong, S. H. (Cerlane)},
+  title        = {{SoftPosit}: A Software Implementation of Posit Arithmetic},
+  howpublished = {\url{https://gitlab.com/cerlane/SoftPosit}},
+  year         = {2018},
+  note         = {NGA team; posit8/16/32 plus generic posit$\langle n,2\rangle$, $2 \le n \le 32$}
+}
+
+@article{omtzigt2020universal,
+  author  = {Omtzigt, E. Theodore L. and Gottschling, Peter and Seligman, Mark
+             and Zorn, William},
+  title   = {Universal Numbers Library: Design and Implementation of a
+             High-Performance Reproducible Number Systems Library},
+  journal = {arXiv preprint arXiv:2012.11011},
+  year    = {2020},
+  url     = {https://arxiv.org/abs/2012.11011},
+  note    = {posit$\langle n,es\rangle$ instantiable from $\langle 2,0\rangle$ to $\langle 256,5\rangle$}
+}
+
+@article{fousse2007mpfr,
+  author  = {Fousse, Laurent and Hanrot, Guillaume and Lef\`{e}vre, Vincent
+             and P\'{e}lissier, Patrick and Zimmermann, Paul},
+  title   = {{\textsc{mpfr}}: A Multiple-Precision Binary Floating-Point Library
+             with Correct Rounding},
+  journal = {\textssc{acm} Transactions on Mathematical Software},
+  volume  = {33},
+  number  = {2},
+  pages   = {13:1--13:15},
+  year    = {2007},
+  doi     = {10.1145/1236463.1236468}
+}
+
+@inproceedings{daramy2003crlibm,
+  author    = {Daramy, Catherine and Defour, David and de Dinechin, Florent
+               and Muller, Jean-Michel},
+  title     = {{\textsc{cr-libm}}: A Correctly Rounded Elementary Function Library},
+  booktitle = {Proc. SPIE 5205, Advanced Signal Processing Algorithms,
+               Architectures, and Implementations \textssc{xiii}},
+  year      = {2003},
+  doi       = {10.1117/12.505591}
+}
+
+@inproceedings{lim2021rlibm,
+  author    = {Lim, Jay P. and Nagarakatte, Santosh},
+  title     = {High Performance Correctly Rounded Math Libraries for 32-bit
+               Floating Point Representations},
+  booktitle = {Proc. 42nd ACM SIGPLAN Conf. on Programming Language Design
+               and Implementation (\textssc{pldi})},
+  pages     = {359--374},
+  year      = {2021},
+  doi       = {10.1145/3453483.3454049}
+}
+
+@misc{coremath,
+  author       = {{The \textsc{core-math} Project}},
+  title        = {{\textsc{core-math}}: Correctly Rounded Mathematical Functions},
+  howpublished = {\url{https://core-math.gitlabpages.inria.fr/}},
+  year         = {2022}
+}
+
+@book{codywaite1980,
+  author    = {Cody, William J. and Waite, William M.},
+  title     = {Software Manual for the Elementary Functions},
+  publisher = {Prentice-Hall},
+  year      = {1980}
+}
+
+@misc{intel_cnr,
+  author       = {{Intel Corporation}},
+  title        = {Conditional Numerical Reproducibility ({CNR}) in
+                  {Intel oneAPI Math Kernel Library}},
+  howpublished = {Intel Developer Documentation},
+  year         = {2023}
+}
+
+@misc{urbit_softblas,
+  author       = {{The Urbit Foundation}},
+  title        = {{SoftBLAS}: Software-Defined {BLAS} for Deterministic Jetting},
+  howpublished = {\url{https://github.com/urbit/SoftBLAS}},
+  year         = {2024}
+}
+
+@misc{urbit_numerics,
+  author       = {{The Urbit Foundation}},
+  title        = {{numerics}: Numerical Libraries for {Urbit}},
+  howpublished = {\url{https://github.com/urbit/numerics}},
+  year         = {2026}
+}
+
+@article{Davis2024,
+author = "N. E. Davis \patp{lagrev-nocfep}",
+title = "The Desert of the Reals:  Floating-Point Arithmetic on Deterministic Systems",
+journal = "Urbit Systems Technical Journal",
+year = 2024,
+volume = 1,
+number = 1,
+pages = "93--131"
+}

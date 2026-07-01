@@ -4,9 +4,9 @@
 
 \addbibresource{mss.bib}
 
-\newcommand{\authorname}{Ernest P. Worrell}
-\newcommand{\authorpatp}{\patp{sampel-palnet}}
-\newcommand{\affiliation}{Kamp Kikakee}
+\newcommand{\authorname}{N.\ E.\ Davis}
+\newcommand{\authorpatp}{\patp{lagrev-nocfep}}
+\newcommand{\affiliation}{ZeroAttest, Groundwire Foundation}
 
 %  Make first page footer:
 \fancypagestyle{firststyle}{%
@@ -23,11 +23,11 @@
 %  Arrange subsequent pages:
 \fancyhf{}
 \fancyhead[LE]{{\urbitfont Urbit Systems Technical Journal}}
-\fancyhead[RO]{Floating-Point Arithmetic on Deterministic Systems}
+\fancyhead[RO]{A Deterministic Numerical Stack}
 \fancyfoot[LE,RO]{\thepage}
 
 %%MANUSCRIPT
-\title{Ernest Goes to Mars:  An Enquiry into the Foundations of Artificial Stupidity}
+\title{A Deterministic Numerical Stack}
 \author{\authorname~\authorpatp \\ \affiliation}
 \date{}
 
@@ -37,7 +37,6 @@
 \thispagestyle{firststyle}
 
 \begin{abstract}
-In this groundbreaking paper, we embark on a cosmic journey with the renowned character Ernest P. Worrell as he ventures into the unexplored realm of Martian computing. Drawing inspiration from Ernest's comically ingenious encounters with everyday challenges, we investigate the foundations of what we term "Artificial Stupidity." As Ernest grapples with Martian technology, we delve into the intricacies of programming errors, algorithmic missteps, and the curious phenomena that arise when human-like intelligence meets extraterrestrial computing systems. Our analysis sheds light on the unexpected intersections between humor, artificial intelligence, and the cosmic absurdity of Martian software. Join us in this interplanetary exploration as we unravel the mysteries of Artificial Stupidity through the lens of Ernest's interstellar escapades.
 \end{abstract}
 
 % We will adjust page numbering in final editing.
@@ -48,60 +47,122 @@ In this groundbreaking paper, we embark on a cosmic journey with the renowned ch
 
 \section{Introduction}
 
-Introduce the scope of your article and investigation.
+Urbit is a deterministic functional operating system whose state is a pure function of its event log \citep{Whitepaper}.  An event log replay must recover the state exactly, on any conforming runtime, indefinitely.  This is not a performance nicety; it is the property that makes the system auditable, upgradeable, and peer-verifiable.  Determinism is a load-bearing property all the way down.
+
+Numerical computing is one of the most slippery places for determinism to leak through its abstractions.  Standard \textsc{ieee}~754 floating-point arithmetic is not associative, as an example, but the situation is much more dire.  The \textsc{ieee}~754 standard~\citep{ieee754-2019} specifies the result of each individual operation under a given rounding mode, but a real numerical program is a composition of operations, and the standard says little about composition.  A fused multiply-add computes $a\cdot b + c$ with a single rounding where two separate operations would round twice; a vectorized dot product sums partial results in an order chosen by the hardware; and a threaded \textsc{blas} reassociates a reduction differently depending on how many cores happened to be available.\footnote{Urbit computing is single-threaded which removes one possible source of nondeterminism.}  Each of these is standards-conformant while none is deterministic across hosts.
+
+The treatment of floating-point representation in Hoon by \citet{Davis2024} established the foundation for Urbit's deterministic numerical computing stack.  This article expounds both the state of the art of Urbit's basic numerical packaging and the next layer:  dense linear algebra, where the nondeterminism of conventional \textsc{blas} and \textsc{ieee} 754 floating-point mathematics are acute and consequential.  We introduce SoftBLAS,\footnote{\href{https://github.com/urbit/SoftBLAS}{\texttt{urbit/SoftBLAS}}} a software-defined \textsc{blas} package; SoftUnum,\footnote{\href{https://github.com/sigilante/SoftUnum}{\texttt{sigilante/SoftUnum}}} a software-defined universal number (unum) package; and other components of a C-based numerical stack that is deterministic and compliant with the Hoon specification.  We further describe the ``ray'' data structure which facilitates the type dispatch for different numeric representations while preserving identity between Nock-specified atoms and C-recognized arrays.
+
+The central conceit is architectural.  In conventional high-performance computing, C (or Fortran) takes primacy:  the C implementation is what runs, and correctness is in some sense whatever the C does.\footnote{Verification and validation apply, of course.}  Urbit inverts this relationship.  The Hoon/Nock \textsc{isa} implementation is the specification; the C jet is an optimization that is \emph{obligated} to produce the specification's exact output for every input, and should be discarded silently whenever it cannot.  Determinism then is not merely a testable, desirable property, but a mandate the Nock-side architecture cannot express the violation of.
 
 \section{Background and Literature}
 
-Exposite the relevant background and literature.
+Although the solution of partial differential equations is one of the oldest significant applications of computing,\footnote{\citet{TODO}.} no standard library emerged for decades---unsurprising given the churn of hardware architectures, the diversity of numerical methods, the lack of a common interface definition, the rapid evolution of programming languages, and the active development of linear algebraic algorithms.\footnote{Even the size of a byte took decades to standardize.}  Given that situation, rigorous bitwise determinism was a concern of vanishingly small importance, whether cross-platform or even for serial runs on the same machine.  However, over time the advent of high-performance computing, the emergence of \textsc{blas} as a pseudo-standard, and the increasing importance of reproducibility in numerical computing have made determinism both more pressing and more achievable.
+
+\subsection{\textsc{blas} as a pseudo-standard}
+
+The Basic Linear Algebra Subprograms originate with Lawson, Hanson, Kincaid, and Krogh's 1979 specification of vector operations on strided arrays~\citep{lawson1979blas}, later extended to matrix-vector (Level~2) and matrix-matrix (Level~3) routines.  The levels track both chronology and
+(na\"{i}ve) asymptotic cost:  Level~1 is $O(n)$, Level~2 is $O(n^2)$, Level~3 is $O(n^3)$.  \textsc{blas} is less a standard than a pseudo-standard---a widely honored set of names and calling conventions (\texttt{?axpy}, \texttt{?gemv}, \texttt{?gemm}, with type prefixes \texttt{s}, \texttt{d}, \texttt{c}, \texttt{z}) with many independent implementations.  (The original \textsc{blas} predated floating-point standardization as \textsc{ieee} 754 by several years.)  That plurality is exactly the problem for a consensus system:  two conforming \textsc{blas} libraries routinely disagree in the low bits, and the same library disagrees with itself across machines and thread counts.  Despite this fuzziness, \textsc{blas} quickly took its place as the bedrock layer of numerical and scientific computation.
+
+\subsection{Sources of floating-point nondeterminism}
+
+Cross-host divergence in a \textsc{blas} computation has a small number of recurring causes:
+
+\begin{itemize}
+  \item  \emph{Reduction order}.  Floating-point addition is not associative, so a dot product or a \texttt{gemm} inner loop summed in a different order yields a different rounded result; tiled and multithreaded implementations choose that order at run time.
+  \item  \emph{Fused multiply-add}.  Hardware that contracts $a\cdot b + c$ to one rounding produces different bits than two roundings, and whether contraction happens is a compiler- and target-dependent decision.
+  \item  \emph{Vectorization and instruction selection}.  \textsc{simd} horizontal sums, \texttt{x87} 80-bit intermediates, and differing \texttt{libm}-style kernels for fast paths all perturb the last bits.
+  \item  \emph{Transcendental functions}.  The elementary functions are not specified to the bit by \textsc{ieee}~754 at all, and every platform \texttt{libm} differs in its implementation.
+\end{itemize}
+
+\citet{Davis2024} further enumerated other reasons that contemporary floating-point mathematics cannot be considered deterministic even when single-threaded on a particular hardware target and instruction set architecture.
+
+\subsection{Reproducibility}
+
+Numerical determinism, or for our purposes synonymously reproducibility, requires that a computation yield the same result to the bit regardless of the platform on which it is carried out.  This would not necessarily require the same algorithmic implementation in all cases (since all correct algorithms should converge on the true value given enough runway), but in practice floating-point quirks force this consideration in almost all cases.
+
+Projects like ReproBLAS have yielded reproducible summation (independent of summation order) through
+error-free transformations and pre-rounding~\citep{demmel2013reproducible}.  Intel's Conditional Numerical Reproducibility offers run-to-run consistency within a fixed code path under documented constraints~\citep{intel_cnr}.  The \textsc{plasma} and \textsc{magma} pro\-jects \citep{agullo2009plasma} took the opposite design stance for performance: dynamic, dependency-driven scheduling that deliberately does not fix reduction order, which is excellent for throughput and fatal for bit-reproducibility.  On the scalar side, correctly rounded elementary-function libraries---\textsc{cr-libm} \linebreak\citep{daramy2003crlibm}, \textsc{rlibm}~\citep{lim2021rlibm}, and the \textsc{core-math} project~\citep{coremath}---show that the transcendentals can be pinned down to the last bit, at a cost.
+
+Urbit is distinguished by its requirement that determinism be not one option among many but a first-class feature of the OS and runtime.  This requirement is structurally enforced by the Nock \textsc{isa}--jetted runtime relationship.  Jets utilize relatively faster code paths and reductions but produce the identical result as the slow path:  the specification is authoritative.  Thus linear algebra techniques, even those following the \textsc{blas} pseudo-standard, must follow a reproducible fast path on all supported architectures.
+
+\section{Deterministic Architecture}
+
+A Nock computation is a pure function from noun to noun.  A \emph{jet} is a native routine registered against a named Hoon core; when the interpreter evaluates that core, it may run the jet instead of the Nock.  The iron discipline that makes this sound is simple:  the jet must produce the same noun as the Hoon, for every input, or it is a bug in the runtime.  A divergence between jet and specification is termed a \emph{jet mismatch} and is treated as a correctness failure, not a numerical tolerance.
+
+The Hoon (or its compiled result as Nock) is therefore the specification, in the strong sense that it defines what the right answer \emph{is}.  The C jet is an accelerant with no semantic authority.  In some cases, the jet may decline:  if a native routine returns the sentinel \texttt{u3\_none}, the interpreter falls through and evaluates the Hoon directly.  The consequence for numerics is that an arithmetic kind with no jet, or with a jet that punts on some inputs, is not unsupported---it is merely slow.  The specification still runs, and the answer is still defined and still deterministic, because Hoon over exact nouns is deterministic by construction.
+
+This crystallizes, or perhaps even inverts, the usual relationship between correctness and performance.  In conventional \textsc{hpc}, one has an optimized C or Fortran program, the optimized C arguably \emph{is} the program and its source reference implementation is documentation (to say nothing of its documentation).  There may of course be bugs in the compiled code, but the optimized program is the concrete artifact.  By contrast in Urbit, the optimized C program must justify itself against an independent authoritative definition.  Determinism thus follows from two facts:  the specification is a pure function of exact data, and the jet is contractually bit-identical to the specification.  A host without the jet computes the same bits more
+slowly; a host with a divergent jet is non-conforming and must be repaired.
+
+For our linked implementations like SoftBLAS, this means the library is never permitted to be ``approximately'' the specification. A \texttt{gemm} jet that summed its inner products in a hardware-chosen order would be a mismatch even if every individual rounding were \textsc{ieee} 754-correct, because the Hoon specification sums them in
+one fixed order and the jet must reproduce \emph{that} number.\footnote{Summation will necessarily exhibit order-dependent drift at the bit level.}  Our \textsc{blas} must satisfy the constraint of determinism to be admissible as a jet at all; thus, SoftBLAS was developed on top of SoftFloat \citep{hauser_softfloat}.  This yields correctness and consistency rather than hardware-optimized performance.
+
+\subsection{The numerical stack}
+\label{sec:stack}
+
+Urbit natively supports \textsc{ieee} 754 floating-point mathematics in its \texttt{\%base} distribution, and through the supplied numerical stack additionally supports unums (posits and quires); complex \textsc{ieee} 754; two's complement integers; and fixed-point mathematics.
+
+The numerical libraries are layered as follows; each layer
+is Hoon-normative with optional, independently verifiable C jets.
 
 \begin{enumerate}
-  \item  Prefer to \texttt{enumerate}.
-  \item  It is easier to refer to than \texttt{itemize}.
-\end{enumerate}
+  % \item  \emph{Reference libraries}.  We desire to minimize the necessary libraries linked to Urbit, but the SoftBLAS deterministic linear algebra library and a SoftUnum universal number library have been developed by Urbit core developers to support a compliant external interface.
+  \item  \emph{Libraries}.  Imported from \texttt{/lib} at compile time.
+  \begin{enumerate}
+    \item  \texttt{/lib/math}.  The basic \textsc{ieee} 754 arithmetic and transcendental functions library supports four precisions (16-bit \texttt{@rh}, 32-bit \texttt{@rs}, 64-bit \texttt{@rd}, and 128-bit \texttt{@rq}) across a battery of functions like exponentiation and logarithm, trigonometric and inverse-trigonometric functions, and rounding and comparison utilities.  Transcendental functions are implemented as Chebyshev minimax polynomials with Cody--Waite range reduction~\citep{codywaite1980}.  Jets run on SoftFloat \citep{hauser_softfloat}.  Originally composed by \patp{lagrev-nocfep} and \patp{mopfel-winrux}.
+    \item \texttt{/lib/twoc}.  A two's-complement integer arithmetic package supporting scalar and array operations TODO.  Jetted with an internal library.  Originally composed by \patp{litlep-nibbyt}.  
+    \item \texttt{/lib/fixed}.  Fixed-point (Q-format) arithmetic at power-of-two total widths.  Unjetted beyond standard integer arithmetic jets because de facto integer mathematics hold.  Originally composed by \patp{lagrev-nocfep}.
+    \item \texttt{/lib/unum}.  2022-standard posit arithmetic~\citep{positstd2022} at five widths (8-bit \texttt{@rpb}; 16-bit \texttt{@rph}; 32-bit \texttt{@rps}; 64-bit \texttt{@rpd}; 128-bit \texttt{@rpq}, i.e. posit8 through posit128), $es=2$ throughout, with quire accumulation.  See Section \ref{sec:verify} on oracle coverage.  Jetted with SoftUnum.  Originally composed by \patp{lagrev-nocfep}.
+    \item \texttt{/lib/complex}.  Complex arithmetic over the four \textsc{ieee} 754 precisions, riding on the scalar float layer.  Originally composed by \patp{lagrev-nocfep}.
+  \end{enumerate}
+  \item \emph{Lagoon (Linear AlGebra in hOON)}.  A rank-$N$ array library (a \texttt{ray}) carrying a \texttt{kind} field that dispatches to the appropriate arithmetic:  \texttt{\%i754}, \texttt{\%uint}, \texttt{\%int2}, \texttt{\%unum}, \texttt{\%cplx}, \texttt{\%fixp}.  Storage is row-major and identical in memory layout to underlying runtime arrays; the \texttt{\%i754} Level-3 path is jetted through SoftBLAS and the \texttt{\%unum} path is jetted through SoftUnum.
+  \item  \emph{Saloon (Scientific ALgorithms in hOON)}.  Scientific algorithms over Lagoon rays.  Types correspond to the Lagoon field.  Element-wise transcendentals are dispatched through \texttt{/lib/math}, and dense routines such as the Jacobi symmetric eigendecomposition.
+  \item  \emph{Maroon (MAchine leaRning in hOON)}.  An inchoate machine learning library built atop Lagoon and Saloon.
+\end{itemize}
 
-\noindent
-Mark \texttt{\textbackslash noindent} in paragraphs that continue the thought of an \texttt{\textbackslash enumerate} block.
+The single most consequential design choice is Lagoon's \texttt{kind} dispatch with fall-through (Listing~\ref{lst:ray}).  One basic array type serves six arithmetics; adding a seventh requires only a Hoon implementation, and a jet for it is optional and separately auditable.  This is architecturally distinct from NumPy (which supplies one \texttt{dtype} per array with no in-band kind tag); from Julia (which has compile-time specialization per concrete type); and from the APL/J/K tradition (which supply a uniform numeric tower with no explicit kind dispatch).  Because an un-jetted kind still runs its Hoon, the specification is authoritative for every kind, jetted or not.  Two other features of \texttt{\$ray}'s design call attention:  the \textsc{msb} pinned \texttt{1} bit, which preserves otherwise-stripped leading zeroes in atoms and thus makes the atom representation exactly match the expected C memory layout of an array; and the \texttt{tail=*} arbitrary noun specialization field, which preserves jet axis addresses in case of future extension.\footnote{For \texttt{\%cplx}, \texttt{bloq} is the $\log_{2}$ of the packed-pair element width (both components combined).  Thus \texttt{@cs} (two \texttt{@rs} components) has \texttt{bloq=6}, while each component \texttt{@rs} has \texttt{bloq=5}.}
 
-\section{Urbit's Implementation}
-
-Oftentimes you will then turn to exploring how Urbit or closely related systems like Nockchain have approached or considered a problem.  You can look at a PR like \citetpr{urbit_urbit_6891}.
-
-\lstset{language=C}
-\begin{lstlisting}
-#include <stdio.h>
-
-double compute(float a, float b) {
-    return a * a + b * b;
-}
-
-int main() {
-    float x = 2.5;
-    float y = 3.7;
-
-    double result = compute(x, y);
-
-    printf("Result: %lf\n", result);
-
-    return 0;
-}
+\begin{lstlisting}[style=listingblock,
+                   label=lst:ray,
+                   caption={Lagoon base types.  From \texttt{/sur/lagoon}.}]
++$  ray               ::  $ray:  n-dimensional array
+  $:  =meta           ::  descriptor
+      data=@ux        ::  data, row-major order
+  ==
+::
++$  prec  [a=@ b=@]   ::  fixed-point precision
++$  meta              ::  $meta:  metadata for a $ray
+  $:  shape=(list @)  ::  list of dimension lengths
+      =bloq           ::  logarithm of bitwidth
+      =kind           ::  name of data type
+      tail=*          ::  per-kind specialization data
+  ==
+::
++$  kind              ::  $kind:  type of array scalars
+  $?  %i754           ::  IEEE 754 float
+      %uint           ::  unsigned integer
+      %int2           ::  2s-complement integer (/lib/twoc)
+      %unum           ::  unum/posit (/lib/unum)
+      %cplx           ::  complex (/lib/complex)
+      %fixp           ::  fixed-point Q a.b (/lib/fixed)
+  ==
+::
++$  baum              ::  $baum:  ndray with metadata
+  $:  =meta           ::
+      data=ndray      ::
+  ==
+::
++$  ndray             ::  $ndray:  n-dim array as list
+    $@  @             ::  single item
+    (list ndray)      ::  nonempty list of children
 \end{lstlisting}
 
-\noindent
-That code snippet was part of the text, and not a standalone entity to which we make separate repeated reference.
+\subsection{SoftBLAS and SoftUnum}
 
-\begin{figure}
-  \begin{lstlisting}[language=Python, caption={Example Python Code}, label={lst:example}]
-  def hello_world():
-      print("Hello, world!")
-  \end{lstlisting}
-\end{figure}
+At the current time, two external numerical libraries facilitate 
+\footnote{Urbit mathematics are supported internally by the \textsc{gnu} Multi-Precision Library and SoftFloat.}
 
-Refer to the code listing: Listing~\ref{lst:example}.  (Note that we don't suppress indentation since it's a float.)
-
-
-\section{A Wild Ernest Appears}
-
-You can have as many sections as make sense.  Only sections and subsections appear in the table of contents.
 
 \section{Conclusion}
 
