@@ -120,7 +120,7 @@ is Hoon-normative with optional, independently verifiable C jets.
     \item \texttt{/lib/complex}.  Complex arithmetic over the four \textsc{ieee} 754 precisions, riding on the scalar float layer.  Originally composed by \patp{lagrev-nocfep}.
   \end{enumerate}
   \item \emph{Lagoon (Linear AlGebra in hOON)}.  A rank-$N$ array library (a \texttt{ray}) carrying a \texttt{kind} field that dispatches to the appropriate arithmetic:  \texttt{\%i754}, \texttt{\%uint}, \texttt{\%int2}, \texttt{\%unum}, \texttt{\%cplx}, \texttt{\%fixp}.  Storage is row-major and identical in memory layout to underlying runtime arrays; the \texttt{\%i754} Level-3 path is jetted through SoftBLAS and the \texttt{\%unum} path is jetted through SoftUnum.
-  \item  \emph{Saloon (Scientific ALgorithms in hOON)}.  Scientific algorithms over Lagoon rays.  Types correspond to the Lagoon field.  Element-wise transcendentals are dispatched through \texttt{/lib/math}, and dense routines such as the Jacobi symmetric eigendecomposition.
+  \item  \emph{Saloon (Scientific ALgorithms in hOON)}.  Scientific algorithms over Lagoon rays.  Types correspond to the Lagoon field.  Element-wise transcendentals are dispatched through \texttt{/lib/math}, and dense routines such as the Jacobi symmetric eigendecomposition.\footnote{Broadly speaking, Lagoon:NumPy::Saloon:SciPy.}
   \item  \emph{Maroon (MAchine leaRning in hOON)}.  An inchoate machine learning library built atop Lagoon and Saloon.
 \end{enumerate}
 
@@ -225,26 +225,26 @@ The mathematical base types are enumerated in Listing~\ref{lst:types}.  These ha
 \toprule
 Atom aura & Description \\
 \midrule
-\texttt{@rh } & 16-bit \textsc{ieee} 754 float \\
-\texttt{@rs } & 32-bit \textsc{ieee} 754 float \\
-\texttt{@rd } & 64-bit \textsc{ieee} 754 float \\
-\texttt{@rq } & 128-bit \textsc{ieee} 754 float \\
+\texttt{@rh  } & 16-bit \textsc{ieee} 754 float \\
+\texttt{@rs  } & 32-bit \textsc{ieee} 754 float \\
+\texttt{@rd  } & 64-bit \textsc{ieee} 754 float \\
+\texttt{@rq  } & 128-bit \textsc{ieee} 754 float \\
 \midrule
-\texttt{@rpb} & 8-bit posit \\
-\texttt{@rph} & 16-bit posit \\
-\texttt{@rps} & 32-bit posit \\
-\texttt{@rpd} & 64-bit posit \\
-\texttt{@rpq} & 128-bit posit \\
-\texttt{@rqb} & 8-bit quire (128-bit accumulator for \texttt{@rpb}) \\
-\texttt{@rqh} & 16-bit quire (256-bit accumulator for \texttt{@rph}) \\
-\texttt{@rqs} & 32-bit quire (512-bit accumulator for \texttt{@rps}) \\
-\texttt{@rqd} & 64-bit quire (1024-bit accumulator for \texttt{@rpd}) \\
-\texttt{@rqq} & 128-bit quire (2048-bit accumulator for \texttt{@rpq}) \\
+\texttt{@rpb } & 8-bit posit \\
+\texttt{@rph } & 16-bit posit \\
+\texttt{@rps } & 32-bit posit \\
+\texttt{@rpd } & 64-bit posit \\
+\texttt{@rpq } & 128-bit posit \\
+\texttt{@rqbH} & 8-bit quire (128-bit accumulator for \texttt{@rpb}) \\
+\texttt{@rqhI} & 16-bit quire (256-bit accumulator for \texttt{@rph}) \\
+\texttt{@rqsJ} & 32-bit quire (512-bit accumulator for \texttt{@rps}) \\
+\texttt{@rqdK} & 64-bit quire (1024-bit accumulator for \texttt{@rpd}) \\
+\texttt{@rqqL} & 128-bit quire (2048-bit accumulator for \texttt{@rpq}) \\
 \midrule
-\texttt{@ch } & 32-bit complex (two 16-bit floats) \\
-\texttt{@cs } & 64-bit complex (two 32-bit floats) \\
-\texttt{@cd } & 128-bit complex (two 64-bit floats) \\
-\texttt{@cq } & 256-bit complex (two 128-bit floats) \\
+\texttt{@ch  } & 32-bit complex (two 16-bit floats) \\
+\texttt{@cs  } & 64-bit complex (two 32-bit floats) \\
+\texttt{@cd  } & 128-bit complex (two 64-bit floats) \\
+\texttt{@cq  } & 256-bit complex (two 128-bit floats) \\
 \bottomrule
 \end{tabular}
 \end{table}
@@ -261,7 +261,7 @@ Elementary functions are checked against \textsc{mpfr}~\citet{fousse2007mpfr} at
 
 \section{Contributions}
 
-This deterministic numerical stack contributes several properties to the broader discussion of numerical determinism and reproducibility.  Determinism is a structural property:  while reproducible floating point is a known goal \citep{demmel2013reproducible,intel_cnr}, our contribution is the first-class enforcement mechanism.  (The co-design methodology itself is treated separately; see \citet{TODO} for a companion article.)
+This deterministic numerical stack contributes several properties to the broader discussion of numerical determinism and reproducibility.  Determinism is a structural property of Urbit:  while reproducible floating point is a standing goal of several parties (\citet{demmel2013reproducible}; \citet{intel_cnr}), Urbit contributes a philosophical first-class enforcement mechanism.\footnote{Jet co-design methodology is treated separately; see \patp{lagrev-nocfep}, pp.~TODO–TODO in this volume, for a companion article.}
 
 Although not novel, the library covers a broad range of bit widths and precisions, including half-precision and quadruple-precision, which are not widely supported in other numerical computing libraries.  Likewise we provided faithfully-rounded elementary functions at all precisions.
 
@@ -269,14 +269,14 @@ Lagoon's heterogeneous-kind array design with a single \texttt{\$ray} type is a 
 
 \section{Benchmarks}
 
-While a software-defined floating-point library will never match the performance of a hardware-accelerated one, we have nevertheless seen impressive speedups by refining the algorithms and the runtime jets.  The benchmarks reported here are for a single-threaded, single-core execution on a modern x86-64 CPU (Apple M4 Max).  They should serve as order-of-magnitude indications on contemporary hardware.
+While a software-defined floating-point library will never match the performance of a hardware-accelerated one, we have nevertheless seen impressive speedups by refining the algorithms and the runtime jets.  The benchmarks reported here are for a single-threaded, single-core execution on a modern x86-64 \textsc{cpu} (Apple M4 Max).  They should serve as order-of-magnitude indications on contemporary hardware.
 
-The first benchmark results tabulate what the jetted system buys over interpreting the Hoon specification directly.  Table~\ref{tab:jet} reports jetted versus interpreted time across the three levels.  For most trials, 100,000 runs were evaluated and averaged.  For the very slowest functions (e.g. half-precision Taylor series inverse sine), this number was modulated downwards substantially.\footnote{Exhaustive results for all precisions are available at TODO.}  The original \texttt{/lib/math} and Saloon implementations of transcendentals were na\"{i}ve Taylor series expansions and serve as a worst-case demonstration.  Accuracies are comparable for the number of Taylor series terms utilized to achieve an appropriate relative tolerance, but the Chebyshev basis functions are uniformly faster and more correct.  All values reported are measured within a running Urbit ship (rather than from an independent test harness).
+The first benchmark results tabulate what the jetted system buys over interpreting the Hoon specification directly.  Table~\ref{tab:jet} reports jetted versus interpreted time for \textsc{ieee} 754 \texttt{/lib/math}.  For most trials, 100,000 runs were evaluated and averaged.  For the very slowest functions (e.g. half-precision Taylor series inverse sine), this number was modulated downwards substantially.\footnote{Exhaustive results for all precisions are available at TODO.}  The original \texttt{/lib/math} and Saloon implementations of transcendentals were na\"{i}ve Taylor series expansions and serve as a worst-case demonstration.  Accuracies are comparable for the number of Taylor series terms utilized to achieve an appropriate relative tolerance, but the Chebyshev basis functions are uniformly faster and more correct.  All values reported are measured within a running Urbit ship (rather than from an independent test harness).
 
 \begin{landscape}
 \begin{table}[h]
 \centering
-\caption{Elapsed times and relative slowdowns of jetted Chebyshev functions for double-precision \texttt{@rd} atom operations with \texttt{/lib/math}, interpreted Chebyshev functions, and interpreted Taylor series functions.  Slowdown is reported relative to the fastest case, the jetted Chebyshev functions.}
+\caption{Elapsed times and relative slowdowns of \textsc{ieee} 754 jetted Chebyshev functions for double-precision \texttt{@rd} atom operations with \texttt{/lib/math}, interpreted Chebyshev functions, and interpreted Taylor series functions.  Slowdown is reported relative to the fastest case, the jetted Chebyshev functions.}
 \label{tab:jet}
 \begin{tabular}{lrrrrr}
 \toprule
@@ -302,21 +302,59 @@ Arm & Chebyshev (jet) & Chebyshev (int.) & Taylor (int.) & C.\ slowdown & T.\ sl
 \end{table}
 \end{landscape}
 
+The \texttt{/lib/unum} transcendentals are currently implemented as Taylor series expansions like the legacy \texttt{/lib/math} operations.  Results are included in Table~\ref{tab:unum}.
+TODO it's a moral duty to implement Chebyshev here for comparison
+
+\begin{landscape}
+\begin{table}[h]
+\centering
+\caption{Elapsed times and relative slowdowns of unum jetted Taylor series functions for 32-bit \texttt{@rps}/\texttt{posit32} atom operations with \texttt{/lib/unum} and interpreted Taylor series functions.  Slowdown is reported relative to the jetted functions.}
+\label{tab:unum}
+\begin{tabular}{lrrrrr}
+\toprule
+Arm & Taylor (jet) & Taylor (int.) & T.\ slowdown \\
+\midrule
+\texttt{+add} & 1.689 µs & 374.74 µs & 222× \\
+\texttt{+sub} & 1.757 µs & 339.75 µs & 193× \\
+\texttt{+mul} & 1.622 µs & 276.50 µs & 170× \\
+\texttt{+div} & 1.443 µs & 344.33 µs & 239× \\
+\texttt{+fma} & 1.897 µs & 492.67 µs & 260× \\
+\texttt{+sqt} & 17.304 µs & 341.57 µs & 20× \\
+\texttt{+neg} & 0.735 µs & 19.68 µs & 27× \\
+\texttt{+lth} & 1.281 µs & 20.80 µs & 16× \\
+\texttt{+exp} & 25.315 µs & 19426.71 µs & 767× \\
+\texttt{+log} & 39.866 µs & 39066.79 µs & 980× \\
+\texttt{+sin} & 34.752 µs & 32292.92 µs & 929× \\
+\texttt{+cos} & 35.678 µs & 32480.51 µs & 910× \\
+\texttt{+atan} & 850.269 µs & 63708.31 µs &  75× \\
+\texttt{+pow} & 60.657 µs & 56962.95 µs & 939× \\
+\texttt{+fdp} & 0.270 µs & 205.49 µs & 761× \\
+\bottomrule
+\end{tabular}
+\end{table}
+\end{landscape}
+
 \subsection{Transcendental accuracy}
 
 TODO
 
-The library produces faithfully rounded functions rather than correctly rounded functions.\footnote{The distinction is that a faithfully rounded result is within 1~\textsc{ulp} of the exact result, while a correctly rounded result is the exact representable value closest to the exact result.  Faithful rounding is often sufficient for numerical applications and is generally faster to compute than correct rounding.  Truly correct rounding is often prohibitively expensive, especially for transcendental functions, and can require much higher intermediate precision to attain. TODO}
+\sloppy
+The libraries instrumented with the Chebyshev basis produce ``faithfully rounded functions'' rather than ``correctly rounded functions''.  The distinction is that a faithfully rounded result is within 1~\textsc{ulp} of the exact result, while a correctly rounded result is the exact representable value closest to the exact result.  Faithful rounding is often sufficient for numerical applications and is generally faster to compute than correct rounding.  Truly correct rounding is often prohibitively expensive, especially for transcendental functions, and can require much higher intermediate precision to attain.\footnote{See \textsc{cr-libm} \citep{daramy2003crlibm}, \textsc{rlibm}~\citep{lim2021rlibm}, and the \textsc{core-math} project~\citep{coremath} for further details.}
 
 \subsection{The price of determinism}
 
 The third field of benchmarking measures the overhead of the determinism guarantee relative to a conventional, nondeterministic, hardware \textsc{blas}. We report SoftBLAS against a stock optimized \textsc{blas} on the same host. We expect SoftBLAS to be slower; here we quantify \emph{how much} (our implementation of) determinism costs.
 
+TODO
 
 \section{Future Work}
 
+We have focused more than our taste on \textsc{ieee} 754 given its ongoing dominance in numerical computation, but we anticipate the libraries beyond \texttt{/lib/math} to grow in relative importance in the future.
+
 \sloppy
-The complex-valued SoftBLAS routines are in progress and will complete the Level 1--3 coverage.  Quire operations in \texttt{/lib/unum} are implemented within the generic posit core but are not yet surfaced as callable top-level arms; exposing them is a prerequisite both for user access and for routing them through the verification harness.  The unum specification also defines valids, which are arithmetic intervals which have not yet seen widespread adoption.  The fixed-point library is relatively under\-developed compared to the other arithmetics, and will be expanded to support more general Q-format widths and operations.
+The complex-valued SoftBLAS routines are in progress and will complete the Level 1--3 coverage.  Quire operations in \texttt{/lib/unum} are implemented within the generic posit core but are not yet surfaced as callable top-level arms; exposing them is a prerequisite both for user access and for routing them through the verification harness.  The unum specification also defines valids, which are arithmetic intervals which have not yet seen widespread adoption.  The fixed-point library is relatively under\-developed compared to the other arithmetics, and will be expanded to support more general Q-format widths and operations.  More components of the various libraries need to be upgraded to a state-of-the-art Chebyshev basis and benchmarked for performance.
+
+Saloon will grow in methods adjacent to scientific computing:  conjugate gradient minimization and other optimization algorithms; random number generators; and the like.
 
 Finally, Maroon, the machine learning library, is in its infancy and will be developed to support a range of machine learning algorithms and techniques.  Part of this field of consideration encompasses the utilization of \textsc{gpu} programming for \textsc{llm}-based computing within or adjacent to Urbit.  \textsc{gpu} numerical nondeterminism and host portability presents a challenge of the same order of magnitude as the baseline reproducibility we have tackled over the past several years in this project.  One can envision a ReproCL as a deterministic counterpart to OpenCL, but it is unclear whether sufficient warrant exists to justify the effort as of the mid-2020s.  Heterogeneous compute would be benefitted by the adoption of alternatives to \textsc{ieee} 754 with better guarantees of portability:  not just unums but \texttt{bfloat16} and other newer types may answer the need.
 
