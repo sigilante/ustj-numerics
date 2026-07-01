@@ -1,6 +1,9 @@
 \documentclass[twoside]{article}
 
 \usepackage{ustj}
+\usepackage{booktabs}
+\usepackage{makecell}
+\usepackage{pdflscape}
 
 \addbibresource{mss.bib}
 
@@ -119,9 +122,9 @@ is Hoon-normative with optional, independently verifiable C jets.
   \item \emph{Lagoon (Linear AlGebra in hOON)}.  A rank-$N$ array library (a \texttt{ray}) carrying a \texttt{kind} field that dispatches to the appropriate arithmetic:  \texttt{\%i754}, \texttt{\%uint}, \texttt{\%int2}, \texttt{\%unum}, \texttt{\%cplx}, \texttt{\%fixp}.  Storage is row-major and identical in memory layout to underlying runtime arrays; the \texttt{\%i754} Level-3 path is jetted through SoftBLAS and the \texttt{\%unum} path is jetted through SoftUnum.
   \item  \emph{Saloon (Scientific ALgorithms in hOON)}.  Scientific algorithms over Lagoon rays.  Types correspond to the Lagoon field.  Element-wise transcendentals are dispatched through \texttt{/lib/math}, and dense routines such as the Jacobi symmetric eigendecomposition.
   \item  \emph{Maroon (MAchine leaRning in hOON)}.  An inchoate machine learning library built atop Lagoon and Saloon.
-\end{itemize}
+\end{enumerate}
 
-The single most consequential design choice is Lagoon's \texttt{kind} dispatch with fall-through (Listing~\ref{lst:ray}).  One basic array type serves six arithmetics; adding a seventh requires only a Hoon implementation, and a jet for it is optional and separately auditable.  This is architecturally distinct from NumPy (which supplies one \texttt{dtype} per array with no in-band kind tag); from Julia (which has compile-time specialization per concrete type); and from the APL/J/K tradition (which supply a uniform numeric tower with no explicit kind dispatch).  Because an un-jetted kind still runs its Hoon, the specification is authoritative for every kind, jetted or not.  Two other features of \texttt{\$ray}'s design call attention:  the \textsc{msb} pinned \texttt{1} bit, which preserves otherwise-stripped leading zeroes in atoms and thus makes the atom representation exactly match the expected C memory layout of an array; and the \texttt{tail=*} arbitrary noun specialization field, which preserves jet axis addresses in case of future extension.\footnote{For \texttt{\%cplx}, \texttt{bloq} is the $\log_{2}$ of the packed-pair element width (both components combined).  Thus \texttt{@cs} (two \texttt{@rs} components) has \texttt{bloq=6}, while each component \texttt{@rs} has \texttt{bloq=5}.}
+The single most consequential design choice is Lagoon's \texttt{kind} dispatch with fall-through (Listing~\ref{lst:ray}).  One basic array type serves six arithmetics; adding a seventh requires only a Hoon implementation, and a jet for it is optional and separately auditable.  This is architecturally distinct from NumPy (which supplies one \texttt{dtype} per array with no in-band kind tag); from Julia (which has compile-time specialization per concrete type); and from the \textsc{apl}/J/K tradition (which supply a uniform numeric tower with no explicit kind dispatch).  Because an un-jetted kind still runs its Hoon, the specification is authoritative for every kind, jetted or not.  Two other features of \texttt{\$ray}'s design call attention:  the \textsc{msb} pinned \texttt{1} bit, which preserves otherwise-stripped leading zeroes in atoms and thus makes the atom representation exactly match the expected C memory layout of an array; and the \texttt{tail=*} arbitrary noun specialization field, which preserves jet axis addresses in case of future extension.\footnote{For \texttt{\%cplx}, \texttt{bloq} is the $\log_{2}$ of the packed-pair element width (both components combined).  Thus \texttt{@cs} (two \texttt{@rs} components) has \texttt{bloq=6}, while each component \texttt{@rs} has \texttt{bloq=5}.}
 
 \begin{lstlisting}[style=listingblock,
                    label=lst:ray,
@@ -161,21 +164,167 @@ The single most consequential design choice is Lagoon's \texttt{kind} dispatch w
 \subsection{SoftBLAS and SoftUnum}
 
 At the current time, two external numerical libraries facilitate 
-\footnote{Urbit mathematics are supported internally by the \textsc{gnu} Multi-Precision Library and SoftFloat.}
+\footnote{Urbit mathematics are supported internally by the \href{https://gmplib.org/}{\textsc{gnu} Multiple Precision Arithmetic Library} and \href{https://www.jhauser.us/arithmetic/SoftFloat.html}{SoftFloat}.}
 
+\subsubsection{SoftBLAS}
+SoftBLAS is built on Berkeley SoftFloat~3e \citep{hauser_softfloat}.  Following SoftFloat, it requires a C99-compliant host and passes all floating-point quantities by value.  Every arithmetic primitive used by every routine is a SoftFloat call: there is no path to a hardware floating-point instruction, and therefore no path to hardware-dependent rounding, contraction, or intermediate precision.  For reasons enumerated by \citet{Davis2024}, this is the only current method which guarantees that the output of a floating-point computation is a pure function of its inputs, and therefore deterministic across hosts.
+
+SoftBLAS covers the four \textsc{ieee} 754 binary precisions used across the stack:  half (\texttt{h}), single (\texttt{s}), double (\texttt{d}), and quadruple (\texttt{q}).\footnote{Complex routines are supplied at half (\texttt{i}), single (\texttt{c}), double (\texttt{z}), and quadruple (\texttt{v}) precisions.}  Routines follow the \textsc{blas} prefixing convention extended to the half and quad types.  Real-valued routines across all three levels are complete as of the cited release; complex-valued routines are in progress but sufficient to support Lagoon's requirements.
+
+\begin{table}[h]
+\centering
+\caption{SoftBLAS coverage by level (real-valued).  TODO}
+\label{tab:coverage}
+\begin{tabular}{@{}lll@{}}
+\toprule
+Level & Cost & Representative routines \\
+\midrule
+1 & $O(n)$   & \texttt{?dot}, \texttt{?axpy}, \texttt{?scal}, \texttt{?nrm2}, \texttt{?asum} \\
+2 & $O(n^2)$ & \texttt{?gemv}, \texttt{?ger}, \texttt{?trmv}, \texttt{?trsv} \\
+3 & $O(n^3)$ & \texttt{?gemm}, \texttt{?syrk}, \texttt{?trsm} \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+The rounding mode is a global, \texttt{softblas\_roundingMode} (a \texttt{char} typedef declared in \texttt{softblas.h}) interpreted by the underlying SoftFloat layer.\footnote{The transcendental function implementations ignore the rounding mode, which thus applies only to the arithmetic operations.}  The admissible values are the SoftFloat~3e rounding modes (round to nearest even, round toward zero, round toward $+\infty$, round toward $-\infty$, and round to nearest-away).\footnote{\textsc{ieee} 754-2008 introduced another mode, round to nearest ties to max magnitude, which is not included in Urbit's toolset.}  The default is round to nearest-even, \texttt{\%n}.  The Hoon specification names the rounding mode in the \texttt{\%base} distribution, and the jet is required to honor it.
+
+SoftBLAS satisfies three conditions that conventional \textsc{blas} libraries do not:
+\begin{enumerate}
+  \item \emph{Fixed reduction order}.  Every reduction (dot products,
+    \texttt{gemm} inner loops, norms) sums in one canonical order, identical to the order the Hoon specification uses.  No tiling or threading is permitted to reassociate it.  (Urbit runtimes are, in any case, single-threaded at the time of writing.)
+  \item \emph{No contraction.} Multiply-add is two roundings, never a fused one, because the specification rounds twice.  There is no \textsc{fma} path, which as \citet{Davis2024} exhibited is prone to nondeterminism.
+  \item \emph{Software rounding.} All rounding is performed by SoftFloat in software, so it is identical on every host regardless of native floating-point behavior.
+\end{enumerate}
+
+\subsubsection{SoftUnum}
+
+SoftUnum is a software-defined universal number (unum) library that implements the 2022 posit standard~\citep{positstd2022}.  It supports five widths (8, 16, 32, 64, and 128 bits) with $es=2$ throughout.  The quire accumulator is implemented in software and is bit-identical across hosts.  The library is jetted into Lagoon's \texttt{\%unum} kind.
+
+\section{Types}
+
+The mathematical base types are enumerated in Listing~\ref{lst:types}.  These have occasioned the introduction of several new atom auras, given in Table~\ref{tab:auras}.  We have not introduced an aura for two's-complement integers at the current time, but these will likely nest under \texttt{@s} (signed integer) in the future.  The \texttt{@rqb} through \texttt{@rqq} auras are quire accumulators for the corresponding posit widths, and are intended for internal algorithms not general use.\footnote{A quire is a $16n$-bit two's-complement fixed-point accumulator with scale $2^{-qscale}$ ($qscale = 8n-16$): a posit value v contributes the exact integer $v * 2^qscale$.}
+
+\begin{lstlisting}[style=listingblock,
+                   label=lst:types,
+                   caption={Mathematical base types.  From \texttt{/sur/lagoon}.}]
++$  kind              ::  $kind:  type of array scalars
+  $?  %i754           ::  IEEE 754 float
+      %uint           ::  unsigned integer
+      %int2           ::  2s-complement integer (/lib/twoc)
+      %unum           ::  unum/posit (/lib/unum)
+      %cplx           ::  complex (/lib/complex)
+      %fixp           ::  fixed-point Q a.b (/lib/fixed)
+  ==
+\end{lstlisting}
+
+\begin{table}[h]
+\centering
+\caption{Existing and new atom auras.  From \texttt{/sur/lagoon}.}
+\label{tab:auras}
+\begin{tabular}{@{}rl@{}}
+\toprule
+Atom aura & Description \\
+\midrule
+\texttt{@rh } & 16-bit \textsc{ieee} 754 float \\
+\texttt{@rs } & 32-bit \textsc{ieee} 754 float \\
+\texttt{@rd } & 64-bit \textsc{ieee} 754 float \\
+\texttt{@rq } & 128-bit \textsc{ieee} 754 float \\
+\midrule
+\texttt{@rpb} & 8-bit posit \\
+\texttt{@rph} & 16-bit posit \\
+\texttt{@rps} & 32-bit posit \\
+\texttt{@rpd} & 64-bit posit \\
+\texttt{@rpq} & 128-bit posit \\
+\texttt{@rqb} & 8-bit quire (128-bit accumulator for \texttt{@rpb}) \\
+\texttt{@rqh} & 16-bit quire (256-bit accumulator for \texttt{@rph}) \\
+\texttt{@rqs} & 32-bit quire (512-bit accumulator for \texttt{@rps}) \\
+\texttt{@rqd} & 64-bit quire (1024-bit accumulator for \texttt{@rpd}) \\
+\texttt{@rqq} & 128-bit quire (2048-bit accumulator for \texttt{@rpq}) \\
+\midrule
+\texttt{@ch } & 32-bit complex (two 16-bit floats) \\
+\texttt{@cs } & 64-bit complex (two 32-bit floats) \\
+\texttt{@cd } & 128-bit complex (two 64-bit floats) \\
+\texttt{@cq } & 256-bit complex (two 128-bit floats) \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+Aura types have been named after the target width in the cases of complex numbers and quires.
+
+\subsection{Verification}
+
+The determinism architecture reduces correctness to one question per routine:  does the jet equal the specification on every input? We answer it insofar as possible with oracles external to both the Hoon and C implementations.  SoftFloat by and large served as the oracle for the \textsc{ieee} 754 floating-point operations (real and complex), while the posit mathematics were verified against two independent references:  SoftPosit~\citep{leong_softposit} (\texttt{posit8}, \texttt{posit16}, \texttt{posit32}) and the Universal library~\citep{omtzigt2020universal} (\texttt{posit64}, \texttt{posit128}).
+
+The quire's defining property---exact accumulation until a single final rounding---is checked directly against an exact rational sum.
+
+Elementary functions are checked against \textsc{mpfr}~\citet{fousse2007mpfr} at high precision.  At half precision the input space is $2^{16}$ values and the test is exhaustive; at single precision the $2^{32}$ space is likewise tested in full.  At double and quadruple precision, where exhaustive testing is infeasible, we report maximum observed unit of least precision TODO (\textsc{ulp}) error over a sampled and edge-weighted input set rather than a guarantee.  We claim a faithful-rounding ($\leq 1$~\textsc{ulp}) result where the testing supports it and a measured bound where it does not.
+
+\section{Contributions}
+
+This deterministic numerical stack contributes several properties to the broader discussion of numerical determinism and reproducibility.  Determinism is a structural property:  while reproducible floating point is a known goal \citep{demmel2013reproducible,intel_cnr}, our contribution is the first-class enforcement mechanism.  (The co-design methodology itself is treated separately; see \citet{TODO} for a companion article.)
+
+Although not novel, the library covers a broad range of bit widths and precisions, including half-precision and quadruple-precision, which are not widely supported in other numerical computing libraries.  Likewise we provided faithfully-rounded elementary functions at all precisions.
+
+Lagoon's heterogeneous-kind array design with a single \texttt{\$ray} type is a novel approach to array libraries, allowing for in-band kind dispatch and fall-through to specification.  As mentioned previously, this permits more flexibility and extensibility in the base representation than NumPy, Julia, or the \textsc{apl}/J/K tradition.  The \texttt{kind} field allows for easy addition of new numeric types without requiring changes to the underlying array structure, and the fall-through mechanism ensures that un-jetted kinds can still be computed correctly using the Hoon specification.
+
+\section{Benchmarks}
+
+While a software-defined floating-point library will never match the performance of a hardware-accelerated one, we have nevertheless seen impressive speedups by refining the algorithms and the runtime jets.  The benchmarks reported here are for a single-threaded, single-core execution on a modern x86-64 CPU (Apple M4 Max).  They should serve as order-of-magnitude indications on contemporary hardware.
+
+The first benchmark results tabulate what the jetted system buys over interpreting the Hoon specification directly.  Table~\ref{tab:jet} reports jetted versus interpreted time across the three levels.  For most trials, 100,000 runs were evaluated and averaged.  For the very slowest functions (e.g. half-precision Taylor series inverse sine), this number was modulated downwards substantially.\footnote{Exhaustive results for all precisions are available at TODO.}  The original \texttt{/lib/math} and Saloon implementations of transcendentals were na\"{i}ve Taylor series expansions and serve as a worst-case demonstration.  Accuracies are comparable for the number of Taylor series terms utilized to achieve an appropriate relative tolerance, but the Chebyshev basis functions are uniformly faster and more correct.  All values reported are measured within a running Urbit ship (rather than from an independent test harness).
+
+\begin{landscape}
+\begin{table}[h]
+\centering
+\caption{Elapsed times and relative slowdowns of jetted Chebyshev functions for double-precision \texttt{@rd} atom operations with \texttt{/lib/math}, interpreted Chebyshev functions, and interpreted Taylor series functions.  Slowdown is reported relative to the fastest case, the jetted Chebyshev functions.}
+\label{tab:jet}
+\begin{tabular}{lrrrrr}
+\toprule
+Arm & Chebyshev (jet) & Chebyshev (int.) & Taylor (int.) & C.\ slowdown & T.\ slowdown \\
+\midrule
+\texttt{+exp} & 1.67 µs & 296 µs & 11.0 ms & 177× & 6,565× \\
+\texttt{+log} & 1.76 µs & 164 µs & 13.3 ms & 94× & 7,600× \\
+\texttt{+sin} & 1.95 µs & 278 µs & 0.94 ms & 143× & 480× \\
+\texttt{+cos} & 1.97 µs & 275 µs & 0.94 ms & 140× & 476× \\
+\texttt{+tan} & 4.53 µs & 241 µs & 1.30 ms & 53× & 288× \\
+\texttt{+atan} & 2.23 µs & 47.6 µs & 109 ms & 21× & 48,784× \\
+\texttt{+atan2} & 2.72 µs & 56.2 µs & 11.5 ms & 21× & 4,237× \\
+\texttt{+asin} & 2.07 µs & 54.8 µs & 205 ms & 27× & 99,130× \\
+\texttt{+acos} & 2.10 µs & 51.2 µs & 5.17 ms & 24× & 2,459× \\
+\texttt{+sqt} & 1.92 µs & 10.3 µs & 73.5 µs & 5× & 38× \\
+\texttt{+cbt} & 2.44 µs & 467 µs & 111 ms & 192× & 45,723× \\
+\texttt{+pow} & 2.87 µs & 656 µs & 1.68 ms & 229× & 585× \\
+\texttt{+pow-n} & 2.62 µs & 217 µs & 219 µs & 83× & 83× \\
+\texttt{+log-2} & 2.34 µs & 164 µs & 13.3 ms & 70× & 5,668× \\
+\texttt{+log-10} & 2.38 µs & 165 µs & 13.4 ms & 69× & 5,638× \\
+\bottomrule
+\end{tabular}
+\end{table}
+\end{landscape}
+
+\subsection{Transcendental accuracy}
+
+TODO
+
+The library produces faithfully rounded functions rather than correctly rounded functions.\footnote{The distinction is that a faithfully rounded result is within 1~\textsc{ulp} of the exact result, while a correctly rounded result is the exact representable value closest to the exact result.  Faithful rounding is often sufficient for numerical applications and is generally faster to compute than correct rounding.  Truly correct rounding is often prohibitively expensive, especially for transcendental functions, and can require much higher intermediate precision to attain. TODO}
+
+\subsection{The price of determinism}
+
+The third field of benchmarking measures the overhead of the determinism guarantee relative to a conventional, nondeterministic, hardware \textsc{blas}. We report SoftBLAS against a stock optimized \textsc{blas} on the same host. We expect SoftBLAS to be slower; here we quantify \emph{how much} (our implementation of) determinism costs.
+
+
+\section{Future Work}
+
+\sloppy
+The complex-valued SoftBLAS routines are in progress and will complete the Level 1--3 coverage.  Quire operations in \texttt{/lib/unum} are implemented within the generic posit core but are not yet surfaced as callable top-level arms; exposing them is a prerequisite both for user access and for routing them through the verification harness.  The unum specification also defines valids, which are arithmetic intervals which have not yet seen widespread adoption.  The fixed-point library is relatively under\-developed compared to the other arithmetics, and will be expanded to support more general Q-format widths and operations.
+
+Finally, Maroon, the machine learning library, is in its infancy and will be developed to support a range of machine learning algorithms and techniques.  Part of this field of consideration encompasses the utilization of \textsc{gpu} programming for \textsc{llm}-based computing within or adjacent to Urbit.  \textsc{gpu} numerical nondeterminism and host portability presents a challenge of the same order of magnitude as the baseline reproducibility we have tackled over the past several years in this project.  One can envision a ReproCL as a deterministic counterpart to OpenCL, but it is unclear whether sufficient warrant exists to justify the effort as of the mid-2020s.  Heterogeneous compute would be benefitted by the adoption of alternatives to \textsc{ieee} 754 with better guarantees of portability:  not just unums but \texttt{bfloat16} and other newer types may answer the need.
 
 \section{Conclusion}
 
-To summarize, why did you write it?  Why do we care?  What impact should it have on Urbit development?
-
-Your bibliography is a separate BibTeX file.  We use the \texttt{plainnat} bibliography style.  You can use \texttt{natbib} citation commands like \texttt{\textbackslash citep\{wikipedia\}} for parenthesized references.  Use \texttt{\textbackslash citet\{wikipedia\}} for inline references.  You can also use \texttt{\textbackslash citeauthor\{wikipedia\}} for the principal author's name.
-
-``You can use traditional TeX---or LaTeX---representations'' \citep{Varney1987}.
-
-“Or you can use fancy quotes—and symbols.”
-
-End the article with the tombstone.\tombstone
+Urbit as a deterministic state machine cannot treat numerical determinism or bitwise reproducibility as merely a tolerance.  The architectural stack we have described here constitutes a partial answer to the challenge underlying \citet{Davis2024}:  how can a numerical computation built on a particular stack be reliably reproducible?  We maintain this determinism by painstaking construction.  The computational cost of determinism is currently (and regrettably) non-negligible, while one can hope for future developments, protocols, and architectures that make it more natural and tenable.\tombstone
 
 \selectlanguage{USenglish}
 \printbibliography
+% TODO check all references for reality
 \end{document}
