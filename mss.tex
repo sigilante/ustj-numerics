@@ -3,7 +3,11 @@
 \usepackage{ustj}
 \usepackage{booktabs}
 \usepackage{makecell}
-\usepackage{pdflscape}
+% \usepackage[figuresleft]{rotating}
+\usepackage{rotating}
+\usepackage{caption}
+\usepackage{pgfplots}
+\pgfplotsset{compat=1.18}
 
 \addbibresource{mss.bib}
 
@@ -95,11 +99,11 @@ A Nock computation is a pure function from noun to noun.  A \emph{jet} is a nati
 
 The Hoon (or its compiled result as Nock) is therefore the specification, in the strong sense that it defines what the right answer \emph{is}.  The C jet is an accelerant with no semantic authority.  In some cases, the jet may decline:  if a native routine returns the sentinel \texttt{u3\_none}, the interpreter falls through and evaluates the Hoon directly.  The consequence for numerics is that an arithmetic kind with no jet, or with a jet that punts on some inputs, is not unsupported---it is merely slow.  The specification still runs, and the answer is still defined and still deterministic, because Hoon over exact nouns is deterministic by construction.
 
-This crystallizes, or perhaps even inverts, the usual relationship between correctness and performance.  In conventional \textsc{hpc}, one has an optimized C or Fortran program, the optimized C arguably \emph{is} the program and its source reference implementation is documentation (to say nothing of its documentation).  There may of course be bugs in the compiled code, but the optimized program is the concrete artifact.  By contrast in Urbit, the optimized C program must justify itself against an independent authoritative definition.  Determinism thus follows from two facts:  the specification is a pure function of exact data, and the jet is contractually bit-identical to the specification.  A host without the jet computes the same bits more
-slowly; a host with a divergent jet is non-conforming and must be repaired.
+This crystallizes, or perhaps even inverts, the usual relationship between correctness and performance.  In conventional \textsc{hpc}, one has an optimized C or Fortran program, the optimized C arguably \emph{is} the program and its source reference implementation is documentation (to say nothing of its documentation).  There may of course be bugs in the compiled code, but the optimized program is the concrete artifact.  By contrast in Urbit, the optimized C program must justify itself against an independent authoritative definition.  Determinism follows from two facts:  the specification is a pure function of its inputs, and the jet is contractually bit-identical to the specification.  A host without the jet computes the same bits more
+slowly; a divergent jet is non-conforming and must be repaired.
 
 For our linked implementations like SoftBLAS, this means the library is never permitted to be ``approximately'' the specification. A \texttt{gemm} jet that summed its inner products in a hardware-chosen order would be a mismatch even if every individual rounding were \textsc{ieee} 754-correct, because the Hoon specification sums them in
-one fixed order and the jet must reproduce \emph{that} number.\footnote{Summation will necessarily exhibit order-dependent drift at the bit level.}  Our \textsc{blas} must satisfy the constraint of determinism to be admissible as a jet at all; thus, SoftBLAS was developed on top of SoftFloat \citep{hauser_softfloat}.  This yields correctness and consistency rather than hardware-optimized performance.
+one fixed order and the jet must reproduce that number.\footnote{Summation will necessarily exhibit order-dependent drift at the bit level.}  Our \textsc{blas} must satisfy the constraint of determinism to be admissible as a jet at all; thus, SoftBLAS was developed on top of SoftFloat \citep{hauser_softfloat}.  This yields correctness and consistency rather than hardware-optimized performance.
 
 \subsection{The numerical stack}
 \label{sec:stack}
@@ -116,7 +120,7 @@ is Hoon-normative with optional, independently verifiable C jets.
     \item  \texttt{/lib/math}.  The basic \textsc{ieee} 754 arithmetic and transcendental functions library supports four precisions (16-bit \texttt{@rh}, 32-bit \texttt{@rs}, 64-bit \texttt{@rd}, and 128-bit \texttt{@rq}) across a battery of functions like exponentiation and logarithm, trigonometric and inverse-trigonometric functions, and rounding and comparison utilities.  Transcendental functions are implemented as Chebyshev minimax polynomials with Cody--Waite range reduction~\citep{codywaite1980}.  Jets run on SoftFloat \citep{hauser_softfloat}.  Originally composed by \patp{lagrev-nocfep} and \patp{mopfel-winrux}.
     \item \texttt{/lib/twoc}.  A two's-complement integer arithmetic package supporting scalar operations.  Jetted with an internal library against \textsc{gmp}.  Originally composed by \patp{litlep-nibbyt}.  
     \item \texttt{/lib/fixed}.  Fixed-point (Q-format) arithmetic at power-of-two total widths.  Unjetted beyond standard integer arithmetic jets because de facto integer mathematics hold.  Originally composed by \patp{lagrev-nocfep}.
-    \item \texttt{/lib/unum}.  2022-standard posit arithmetic~\citep{positstd2022} at five widths (8-bit \texttt{@rpb}; 16-bit \texttt{@rph}; 32-bit \texttt{@rps}; 64-bit \texttt{@rpd}; 128-bit \texttt{@rpq}, i.e. posit8 through posit128), $es=2$ throughout, with quire accumulation.  See Section \ref{sec:verify} on oracle coverage.  Jetted with SoftUnum.  Originally composed by \patp{lagrev-nocfep}.
+    \item \texttt{/lib/unum}.  2022-standard posit arithmetic~\citep{positstd2022} at five widths (8-bit \texttt{@rpb}; 16-bit \texttt{@rph}; 32-bit \texttt{@rps}; 64-bit \texttt{@rpd}; 128-bit \texttt{@rpq}, i.e. posit8 through posit128), $es=\text{2}$ throughout, with quire accumulation.  See Section \ref{sec:verify} on oracle coverage.  Jetted with SoftUnum.  Originally composed by \patp{lagrev-nocfep}.
     \item \texttt{/lib/complex}.  Complex arithmetic over the four \textsc{ieee} 754 precisions, riding on the scalar float layer.  Originally composed by \patp{lagrev-nocfep}.
   \end{enumerate}
   \item \emph{Lagoon (Linear AlGebra in hOON)}.  A rank-$N$ array library (a \texttt{\$ray}) carrying a \texttt{\$kind} field that dispatches to the appropriate arithmetic:  \texttt{\%i754}, \texttt{\%uint}, \texttt{\%int2}, \texttt{\%unum}, \texttt{\%cplx}, \texttt{\%fixp}.  Storage is row-major and identical in memory layout to underlying runtime arrays; the \texttt{\%i754} Level-3 path is jetted through SoftBLAS and the \texttt{\%unum} path is jetted through SoftUnum.
@@ -124,11 +128,12 @@ is Hoon-normative with optional, independently verifiable C jets.
   \item  \emph{Maroon (MAchine leaRning in hOON)}.  An inchoate machine learning library built atop Lagoon and Saloon.
 \end{enumerate}
 
-The single most consequential design choice is Lagoon's \texttt{\$kind} dispatch with fall-through (Listing~\ref{lst:ray}).  One basic array type serves six arithmetics; adding a seventh requires only a Hoon implementation, and a jet for it is optional and separately auditable.  This is architecturally distinct from NumPy (which supplies one \texttt{dtype} per array with no in-band kind tag); from Julia (which has compile-time specialization per concrete type); and from the \textsc{apl}/J/K tradition (which supply a uniform numeric tower with no explicit kind dispatch).  Because an un-jetted kind still runs its Hoon, the specification is authoritative for every kind, jetted or not.  Two other features of \texttt{\$ray}'s design call attention:  the \textsc{msb} pinned \texttt{1} bit, which preserves otherwise-stripped leading zeroes in atoms and thus makes the atom representation exactly match the expected C memory layout of an array; and the \texttt{tail=*} arbitrary noun specialization field, which preserves jet axis addresses in case of future extension.\footnote{For \texttt{\%cplx}, \texttt{bloq} is the $\log_{2}$ of the packed-pair element width (both components combined).  Thus \texttt{@cs} (two \texttt{@rs} components) has \texttt{bloq=6}, while each component \texttt{@rs} has \texttt{bloq=5}.}
+The single most consequential design choice is Lagoon's \texttt{\$kind} dispatch with fall-through (Listing~\ref{lst:ray}).  One basic array type serves six arithmetics; adding a seventh requires only a Hoon implementation, and a jet for it is optional and separately auditable.  This is architecturally distinct from NumPy (which supplies one \texttt{dtype} per array with no in-band kind tag); from Julia (which has compile-time specialization per concrete type); and from the \textsc{apl}/J/K tradition (which supply a uniform numeric tower with no explicit kind dispatch).  Because an un-jetted kind still runs its Hoon, the specification is authoritative for every kind, jetted or not.  Two other features of \texttt{\$ray}'s design call attention:  the \textsc{msb} pinned \texttt{1} bit, which preserves otherwise-stripped leading zeroes in atoms and thus makes the atom representation exactly match the expected C memory layout of an array; and the \texttt{tail=*} arbitrary noun specialization field, which preserves jet axis addresses in case of future extension.\footnote{For \texttt{\%cplx}, \texttt{bloq} is the $\log_\text{2}$ of the packed-pair element width (both components combined).  Thus \texttt{@cs} (two \texttt{@rs} components) has \texttt{bloq=6}, while each component \texttt{@rs} has \texttt{bloq=5}.}
 
 \begin{lstlisting}[style=listingblock,
                    label=lst:ray,
-                   caption={Lagoon base types.  From \texttt{/sur/lagoon}.}]
+                   caption={Lagoon base types.  From \texttt{/sur/lagoon}.},
+                   float=p]
 +$  ray               ::  $ray:  n-dimensional array
   $:  =meta           ::  descriptor
       data=@ux        ::  data, row-major order
@@ -163,13 +168,12 @@ The single most consequential design choice is Lagoon's \texttt{\$kind} dispatch
 
 \subsection{SoftBLAS and SoftUnum}
 
-At the current time, two external numerical libraries facilitate 
-\footnote{Urbit mathematics are supported internally by the \href{https://gmplib.org/}{\textsc{gnu} Multiple Precision Arithmetic Library} and \href{https://www.jhauser.us/arithmetic/SoftFloat.html}{SoftFloat}.}
+At the current time, two external numerical libraries facilitate the runtime jets:  SoftBLAS and SoftUnum.  Both are software-defined, deterministic, and cross-platform.\footnote{Urbit mathematics are supported internally by the \href{https://gmplib.org/}{\textsc{gnu} Multiple Precision Arithmetic Library} and \href{https://www.jhauser.us/arithmetic/SoftFloat.html}{SoftFloat}.}
 
 \subsubsection{SoftBLAS}
-SoftBLAS is built on Berkeley SoftFloat~3e \citep{hauser_softfloat}.  Following SoftFloat, it requires a C99-compliant host and passes all floating-point quantities by value.  Every arithmetic primitive used by every routine is a SoftFloat call: there is no path to a hardware floating-point instruction, and therefore no path to hardware-dependent rounding, contraction, or intermediate precision.  For reasons enumerated by \citet{Davis2024}, this is the only current method which guarantees that the output of a floating-point computation is a pure function of its inputs, and therefore deterministic across hosts.
+SoftBLAS is built on Berkeley SoftFloat~3e \citep{hauser_softfloat}.  Following SoftFloat, it requires a C99-compliant host and passes all floating-point quantities by value.  Every arithmetic primitive used by every routine is a SoftFloat call: there is no path to a hardware floating-point instruction, and therefore no path to hardware-dependent rounding, contraction, or intermediate precision.  For reasons enumerated by \citet{Davis2024}, this is one of the only current methods which guarantees that the output of a floating-point computation is a pure function of its inputs, and therefore deterministic across hosts.\footnote{ReproBLAS in contrast uses a hardware floating-point path by binning and accumulation, making reduction order irrelevant but still subject to hardware-dependent rounding \citep{demmel2013reproducible}.  SoftBLAS is slower but deterministic; it makes the fewest assumptions about the host.}
 
-SoftBLAS covers the four \textsc{ieee} 754 binary precisions used across the stack:  half (\texttt{h}), single (\texttt{s}), double (\texttt{d}), and quadruple (\texttt{q}).\footnote{Complex routines are supplied at half (\texttt{i}), single (\texttt{c}), double (\texttt{z}), and quadruple (\texttt{v}) precisions.}  Routines follow the \textsc{blas} prefixing convention extended to the half and quad types.  Real-valued routines across all three levels are complete as of the cited release; complex-valued routines are in progress but sufficient to support Lagoon's requirements.
+SoftBLAS covers the four \textsc{ieee} 754 binary precisions used across the stack:  half (\texttt{h}), single (\texttt{s}), double (\texttt{d}), and quadruple (\texttt{q}).\footnote{Complex routines are supplied at half (\texttt{i}), single (\texttt{c}), double (\texttt{z}), and quadruple (\texttt{v}) precisions.}  Routines follow the \textsc{blas} prefixing convention extended to the half and quad types.  Real-valued routines across all three levels supply a subset sufficient for Lagoon requirements as of the cited release; complex-valued routines are in progress but sufficient to support Lagoon's requirements.
 
 \begin{table}[h]
 \centering
@@ -198,15 +202,16 @@ SoftBLAS satisfies three conditions that conventional \textsc{blas} libraries do
 
 \subsubsection{SoftUnum}
 
-SoftUnum is a software-defined universal number (unum) library that implements the 2022 posit standard~\citep{positstd2022}.  It supports five widths (8, 16, 32, 64, and 128 bits) with $es=2$ throughout.  The quire accumulator is implemented in software and is bit-identical across hosts.  The library is jetted into Lagoon's \texttt{\%unum} kind.
+SoftUnum is a software-defined universal number (unum) library that implements the 2022 posit standard~\citep{positstd2022}.  It supports five widths (8, 16, 32, 64, and 128 bits) with $es=\text{2}$ throughout.  The quire accumulator is implemented in software and is bit-identical across hosts.  The library is jetted into Lagoon's \texttt{\%unum} kind.
 
 \section{Types}
 
-The mathematical base types are enumerated in Listing~\ref{lst:types}.  These have occasioned the introduction of several new atom auras, given in Table~\ref{tab:auras}.  We have not introduced an aura for two's-complement integers at the current time, but these will likely nest under \texttt{@s} (signed integer) in the future.  The \texttt{@rqb} through \texttt{@rqq} auras are quire accumulators for the corresponding posit widths, and are intended for internal algorithms not general use.\footnote{A quire is a $16n$-bit two's-complement fixed-point accumulator with scale $2^{-qscale}$ ($qscale = 8n-16$): a posit value v contributes the exact integer $v * 2^qscale$.}
+The mathematical base types are enumerated in Listing~\ref{lst:types}.  These have occasioned the introduction of several new atom auras, given in Table~\ref{tab:auras}.  We have not introduced an aura for two's-complement integers at the current time, but these will likely nest under \texttt{@s} (signed integer) in the future.  The \texttt{@rqb} through \texttt{@rqq} auras are quire accumulators for the corresponding posit widths, and are intended for internal algorithms not general use.\footnote{A quire is a $\text{16}n$-bit two's-complement fixed-point accumulator with scale $\text{2}^{-\text{qscale}}$ ($\text{qscale} = \text{8}n-\text{16}$): a posit value v contributes the exact integer $v \times \text{2}^\text{qscale}$.}
 
 \begin{lstlisting}[style=listingblock,
                    label=lst:types,
-                   caption={Mathematical base types.  From \texttt{/sur/lagoon}.}]
+                   caption={Mathematical base types.  From \texttt{/sur/lagoon}.},
+                   float=tb]
 +$  kind              ::  $kind:  type of array scalars
   $?  %i754           ::  IEEE 754 float
       %uint           ::  unsigned integer
@@ -225,31 +230,47 @@ The mathematical base types are enumerated in Listing~\ref{lst:types}.  These ha
 \toprule
 Atom aura & Description \\
 \midrule
-\texttt{@rh  } & 16-bit \textsc{ieee} 754 float \\
-\texttt{@rs  } & 32-bit \textsc{ieee} 754 float \\
-\texttt{@rd  } & 64-bit \textsc{ieee} 754 float \\
-\texttt{@rq  } & 128-bit \textsc{ieee} 754 float \\
+\texttt{@rh~~} & 16-bit \textsc{ieee} 754 float \\
+\texttt{@rs~~} & 32-bit \textsc{ieee} 754 float \\
+\texttt{@rd~~} & 64-bit \textsc{ieee} 754 float \\
+\texttt{@rq~~} & 128-bit \textsc{ieee} 754 float \\
 \midrule
-\texttt{@rpb } & 8-bit posit \\
-\texttt{@rph } & 16-bit posit \\
-\texttt{@rps } & 32-bit posit \\
-\texttt{@rpd } & 64-bit posit \\
-\texttt{@rpq } & 128-bit posit \\
+\texttt{@rpb~} & 8-bit posit \\
+\texttt{@rph~} & 16-bit posit \\
+\texttt{@rps~} & 32-bit posit \\
+\texttt{@rpd~} & 64-bit posit \\
+\texttt{@rpq~} & 128-bit posit \\
 \texttt{@rqbH} & 8-bit quire (128-bit accumulator for \texttt{@rpb}) \\
 \texttt{@rqhI} & 16-bit quire (256-bit accumulator for \texttt{@rph}) \\
 \texttt{@rqsJ} & 32-bit quire (512-bit accumulator for \texttt{@rps}) \\
 \texttt{@rqdK} & 64-bit quire (1024-bit accumulator for \texttt{@rpd}) \\
 \texttt{@rqqL} & 128-bit quire (2048-bit accumulator for \texttt{@rpq}) \\
 \midrule
-\texttt{@ch  } & 32-bit complex (two 16-bit floats) \\
-\texttt{@cs  } & 64-bit complex (two 32-bit floats) \\
-\texttt{@cd  } & 128-bit complex (two 64-bit floats) \\
-\texttt{@cq  } & 256-bit complex (two 128-bit floats) \\
+\texttt{@ch~~} & 32-bit complex (two 16-bit floats) \\
+\texttt{@cs~~} & 64-bit complex (two 32-bit floats) \\
+\texttt{@cd~~} & 128-bit complex (two 64-bit floats) \\
+\texttt{@cq~~} & 256-bit complex (two 128-bit floats) \\
 \bottomrule
 \end{tabular}
 \end{table}
 
 Aura types have been named after the target width in the cases of complex numbers and quires.
+
+\section{Contributions}
+
+This deterministic numerical stack contributes several properties to the broader discussion of numerical determinism and reproducibility.  Determinism is a structural property of Urbit:  while reproducible floating point is a standing goal of several parties (\citet{demmel2013reproducible}; \citet{intel_cnr}), Urbit contributes a first-class philosophical requirement.\footnote{Jet co-design methodology is treated separately; see \patp{lagrev-nocfep}, pp.~TODO–TODO in this volume, for a companion article.}
+
+Although not novel, the library covers a broad range of bit widths and precisions, including half-precision and quadruple-precision, which are not widely supported in other numerical computing libraries.  Likewise we provided faithfully-rounded elementary functions at most precisions and quantify their accuracy.
+
+Lagoon's heterogeneous-kind array design with a single \texttt{\$ray} type is a novel approach to array libraries, allowing for in-band kind dispatch and fall-through to specification.  As mentioned previously, this permits more flexibility and extensibility in the base representation than NumPy, Julia, or the \textsc{apl}/J/K tradition.  The \texttt{kind} field allows for easy addition of new numeric types without requiring changes to the underlying array structure, and the fall-through mechanism ensures that un-jetted kinds can still be computed correctly using the Hoon specification.
+
+\section{Benchmarks}
+
+While a software-defined floating-point library will never match the performance of a hardware-accelerated one, we have nevertheless seen impressive speedups by refining the algorithms and the runtime jets.  The benchmarks reported here are for a single-threaded, single-core execution on a modern 64-bit compiler \textsc{cpu} (AArch64, Apple M4 Max).  They should serve as order-of-magnitude indications on contemporary hardware.
+
+The first benchmark results tabulate what the jetted system buys over interpreting the Hoon specification directly.  Table~\ref{tab:jet} reports jetted versus interpreted time for \textsc{ieee} 754 \texttt{/lib/math}.  For most trials, 100,000 runs were evaluated and averaged.\footnote{Urbit memoizes aggressively, so countermeasures were taken to prevent caching effects.  Inputs were varied every iteration and the result of each call was folded into a returned accumulator in order that neither input nor whole loop is a cacheable constant noun.}  For the very slowest functions (e.g. half-precision Taylor series inverse sine), this number was modulated downwards substantially.\footnote{Exhaustive results are available at \href{https://github.com/urbit/numerics/tree/main/benchmark}{\texttt{urbit/numerics@main:benchmark}}.}  The original \texttt{/lib/math} and Saloon implementations of transcendentals were na\"{i}ve Taylor series expansions and serve as a worst-case demonstration.  Accuracies are comparable for the number of Taylor series terms utilized to achieve an appropriate relative tolerance, but the Chebyshev basis functions are uniformly faster and more correct.  All values reported are measured within a running Urbit ship (rather than from an independent test harness).
+
+The \texttt{/lib/unum} transcendentals are currently implemented as Chebyshev basis expansions like the \texttt{/lib/math} operations.  Results are included in Table~\ref{tab:unum}.
 
 \subsection{Verification}
 \label{sec:verify}
@@ -258,24 +279,11 @@ The determinism architecture reduces correctness to one question per routine:  d
 
 The quire's defining property---exact accumulation until a single final rounding---is checked directly against an exact rational sum.
 
-Elementary functions are checked against \textsc{mpfr}~\citep{fousse2007mpfr} at high precision.  At half precision the input space is $2^{16}$ values and the test is exhaustive; at single precision the $2^{32}$ space is likewise tested in full.  At double and quadruple precision, where exhaustive testing is infeasible, we report maximum observed unit in the last place (\textsc{ulp}) error over a sampled and edge-weighted input set rather than a guarantee.  We claim a faithful-rounding ($\leq 1$~\textsc{ulp}) result where the testing supports it and a measured bound where it does not.
+Elementary functions are checked against \textsc{mpfr}~\citep{fousse2007mpfr} at high precision.  At half precision the input space is $\text{2}^\text{16}$ values and the test is exhaustive; at single precision the $\text{2}^\text{32}$ space is likewise tested in full.  At double and quadruple precision, where exhaustive testing is infeasible, we report maximum observed unit in the last place (\textsc{ulp}) error over a sampled and edge-weighted input set rather than a guarantee.  We claim a faithful-rounding ($\leq \text{1}$~\textsc{ulp}) result where the testing supports it and a measured bound where it does not.
 
-\section{Contributions}
+We report the errors of the transcendental functions in terms of \textsc{ulp} error, which is a standard measure of floating-point accuracy.\footnote{\textsc{ulp} is defined as the distance between two adjacent representable floating-point numbers, although the exact definition can vary slightly depending on the author; we follow \citet{MullerEtAl2018}.  A very good \textsc{ulp} error is typically 0.5 or less, which results from a correctly rounded library instead of a faithfully rounded one.  Production \texttt{libm} often offers merely 1--4 maximum \textsc{ulp} (e.g. \href{gnu.org/software/libc/manual/html_node/Errors-in-Math-Functions.html}{\textsc{gnu} \texttt{libc}} claims ``within a few \textsc{ulp}'', \citet{glibc_matherr}).}  The maximum observed \textsc{ulp} error for each function is reported against an independent oracle, which is typically a high-precision library such as \texttt{mpmath}.  The results are summarized in Tables~\ref{tab:ulp-math} and~\ref{tab:ulp-unum}.
 
-This deterministic numerical stack contributes several properties to the broader discussion of numerical determinism and reproducibility.  Determinism is a structural property of Urbit:  while reproducible floating point is a standing goal of several parties (\citet{demmel2013reproducible}; \citet{intel_cnr}), Urbit contributes a philosophical first-class enforcement mechanism.\footnote{Jet co-design methodology is treated separately; see \patp{lagrev-nocfep}, pp.~TODO–TODO in this volume, for a companion article.}
-
-Although not novel, the library covers a broad range of bit widths and precisions, including half-precision and quadruple-precision, which are not widely supported in other numerical computing libraries.  Likewise we provided faithfully-rounded elementary functions at all precisions.
-
-Lagoon's heterogeneous-kind array design with a single \texttt{\$ray} type is a novel approach to array libraries, allowing for in-band kind dispatch and fall-through to specification.  As mentioned previously, this permits more flexibility and extensibility in the base representation than NumPy, Julia, or the \textsc{apl}/J/K tradition.  The \texttt{kind} field allows for easy addition of new numeric types without requiring changes to the underlying array structure, and the fall-through mechanism ensures that un-jetted kinds can still be computed correctly using the Hoon specification.
-
-\section{Benchmarks}
-
-While a software-defined floating-point library will never match the performance of a hardware-accelerated one, we have nevertheless seen impressive speedups by refining the algorithms and the runtime jets.  The benchmarks reported here are for a single-threaded, single-core execution on a modern 64-bit compiler \textsc{cpu} (AArch64, Apple M4 Max).  They should serve as order-of-magnitude indications on contemporary hardware.
-
-The first benchmark results tabulate what the jetted system buys over interpreting the Hoon specification directly.  Table~\ref{tab:jet} reports jetted versus interpreted time for \textsc{ieee} 754 \texttt{/lib/math}.  For most trials, 100,000 runs were evaluated and averaged.\footnote{Urbit memoizes aggressively, so countermeasures were taken to prevent caching effects.  Inputs were varied every iteration and the result of each call was folded into a returned accumulator in order that neither input nor whole loop is a cacheable constant noun.}  For the very slowest functions (e.g. half-precision Taylor series inverse sine), this number was modulated downwards substantially.\footnote{Exhaustive results for all precisions are available at \href{https://github.com/urbit/numerics/tree/main/benchmark}{\texttt{urbit/numerics@main:benchmark}}.}  The original \texttt{/lib/math} and Saloon implementations of transcendentals were na\"{i}ve Taylor series expansions and serve as a worst-case demonstration.  Accuracies are comparable for the number of Taylor series terms utilized to achieve an appropriate relative tolerance, but the Chebyshev basis functions are uniformly faster and more correct.  All values reported are measured within a running Urbit ship (rather than from an independent test harness).
-
-\begin{landscape}
-\begin{table}[h]
+\begin{sidewaystable}[tp]
 \centering
 \caption{Elapsed times and relative slowdowns of \textsc{ieee} 754 jetted Chebyshev functions for double-precision \texttt{@rd} atom operations with \texttt{/lib/math}, interpreted Chebyshev functions, and interpreted Taylor series functions.  Slowdown is reported relative to the fastest case, the jetted Chebyshev functions.}
 \label{tab:jet}
@@ -300,13 +308,9 @@ Arm & Chebyshev (jet) & Chebyshev (int.) & Taylor (int.) & C.\ slowdown & T.\ sl
 \texttt{+log-10} & 2.38 µs & 165 µs & 13.4 ms & 69× & 5,638× \\
 \bottomrule
 \end{tabular}
-\end{table}
-\end{landscape}
+\end{sidewaystable}
 
-The \texttt{/lib/unum} transcendentals are currently implemented as Chebyshev basis expansions like the \texttt{/lib/math} operations.  Results are included in Table~\ref{tab:unum}.
-
-\begin{landscape}
-\begin{table}[h]
+\begin{sidewaystable}[tp]
 \centering
 \caption{Elapsed times and relative slowdowns of unum jetted Chebyshev functions for 32-bit \texttt{@rps} \texttt{posit32} operations with \texttt{/lib/unum}, interpreted Chebyshev functions, jetted Taylor series functions, and interpreted Taylor series functions.  Slowdown is reported relative to the jetted Chebyshev functions.}
 \label{tab:unum}
@@ -336,41 +340,46 @@ Arm & Chebyshev (jet) & Chebyshev (int.) & Taylor (jet) & Taylor (int.) & C.\ sl
 \texttt{+pow-n} & 2.81 µs & 698 µs  & --- & --- & 248× & --- \\
 \texttt{+log-2} & 18.1 µs & 743 µs & --- & --- & 41× & ---\\
 \texttt{+log-10} & 18.1 µs & 756 µs & --- & --- & 42× & --- \\
-\\
 \texttt{+fdp} & 259 ns & 157 µs & 270 ns & 205 µs & 606× & --- \\
 \bottomrule
 \end{tabular}
-\end{table}
-\end{landscape}
-
-\subsection{Transcendental accuracy}
-\label{sec:ulp}
+\end{sidewaystable}
 
 \sloppy
-The libraries instrumented with the Chebyshev basis are designed to produce ``faithfully rounded functions'' rather than ``correctly rounded functions'' for composed operations, while dedicated (non-composed) kernels frequently do better still.  The distinction is that a faithfully rounded result is within 1~\textsc{ulp} of the exact result \citep{Rump2008}, while a correctly rounded result is the exact representable value closest to the exact result.  Faithful rounding is often sufficient for numerical applications and is generally faster to compute than correct rounding.  Truly correct rounding is often prohibitively expensive, especially for transcendental functions, and can require much higher intermediate precision to attain.\footnote{See \textsc{cr-libm} \citep{daramy2003crlibm}, \textsc{rlibm}~\citep{lim2021rlibm}, and the \textsc{core-math} project~\citep{coremath} for further details.}  We measured, rather than merely asserted, this claim: Tables~\ref{tab:ulp-math} and~\ref{tab:ulp-unum} report the maximum observed \textsc{ulp} error of every transcendental arm against an independent \texttt{mpmath}-checked oracle,\footnote{\texttt{libmath/tools/cheb\_check.py} and \texttt{unum\_cheb\_check.py}.  Per each script's own convention, \texttt{mpmath} independently verifies the algorithm-of-record; it does not define it.  Half precision (\texttt{@rh}) and all three posit widths are tested exhaustively over their full input space; single, double, and quadruple precision (\texttt{@rs}/\texttt{@rd}/\texttt{@rq}) are sampled over a broad range with edge weighting near breakpoints and powers of two, since exhaustive testing is infeasible at those widths.} superseding the earlier qualitative claim of uniform faithful rounding.
+The libraries instrumented with the Chebyshev basis are designed to produce ``faithfully rounded functions'' rather than ``correctly rounded functions'' for composed operations, while dedicated (non-composed) kernels frequently do better still.  The distinction is that a faithfully rounded result is within 1~\textsc{ulp} of the exact result \citep{Rump2008}, while a correctly rounded result is the exact representable value closest to the exact result.  Faithful rounding is often sufficient for numerical applications and is generally faster to compute than correct rounding.  Truly correct rounding is often prohibitively expensive, especially for transcendental functions, and can require much higher intermediate precision to attain.\footnote{See \textsc{cr-libm} \citep{daramy2003crlibm}, \textsc{rlibm}~\citep{lim2021rlibm}, and the \textsc{core-math} project~\citep{coremath} for further details.}  Tables~\ref{tab:ulp-math} and~\ref{tab:ulp-unum} report the maximum observed \textsc{ulp} error of every transcendental arm against an independent \texttt{mpmath}-checked oracle.\footnote{\texttt{libmath/tools/cheb\_check.py} and \texttt{unum\_cheb\_check.py}.  \texttt{mpmath} independently verifies the algorithm-of-record.  Half precision \textsc{ieee} 754 and all three posit widths are tested exhaustively over their entire input space; single, double, and quadruple precision (\texttt{@rs}/\texttt{@rd}/\texttt{@rq}) are sampled over a broad range with edge weighting near breakpoints and powers of two, since exhaustive testing is infeasible at those widths.}
+
+In Tables~\ref{tab:ulp-math} and~\ref{tab:ulp-unum}, the superscripts carry the following meanings:
+
+\begin{itemize}
+  \item \textsuperscript{c} marks a composed arm,\footnote{The arms \texttt{+pow}, \texttt{+cbt}, and integer-exponent \texttt{+pow-n} beyond the cheap exact cases are built from \texttt{+exp}/\texttt{+log} or repeated multiplication rather than an independently minimax-fit kernel; \texttt{/lib/unum}'s \texttt{+asin}/\texttt{+acos} are likewise composed, as $\mathrm{atan}(\frac{x}{\sqrt{\text{1}-x^\text{2}}})$ (and the corresponding identity for \texttt{+acos}) rather than a dedicated rational kernel---unlike \texttt{/lib/math}'s \texttt{+asin}/\texttt{+acos}, which use one, and so are unmarked in Table~\ref{tab:ulp-math}.} whose error is inherited from its constituents' chained roundings rather than directly controlled.
+  \item \textsuperscript{e} marks an exhaustive sweep over the entire input space.  (Unmarked cells describe sampled ranges.)
+  \item \textsuperscript{f} marks where an imprecision in a previous version of the Chebyshev fit led to massive error in the reduced argument, in which the range reduction quotient for \texttt{@rh} was not representable in half precision (Table~\ref{tab:ulp-before}).  This was replaced by widening the intermediate result to \texttt{@rs}, producing a faithful rounding for \texttt{@rh} as well.  As this bug results from a na\"{i}ve application of the Chebyshev fit to half-precision range reduction, we report it as a cautionary aside.
+  \item \textsuperscript{k} marks dedicated kernels for \texttt{+tan} (replacing the composed \texttt{sin}/\texttt{cos} ratio used at \texttt{@rh}/\texttt{@rq}).  A dedicated kernel was investigated but found to regress \texttt{@rh} (the 11-bit mantissa leaves insufficient headroom) and to need a different technique entirely at \texttt{@rq} (the Chebyshev series coefficients grow rather than shrink at high degree causing numerical instability).
+  \item \textsuperscript{n} marks \texttt{/lib/unum}'s \texttt{+cbt}, which returns NaR for negative inputs and so is swept over positive inputs only.
+\end{itemize}
 
 \begin{table}[h]
 \centering
 \caption{Maximum observed \textsc{ulp} error, \texttt{/lib/math} (\textsc{ieee} 754), against an \texttt{mpmath}-checked oracle.  \texttt{@rh} and marked cells are exhaustive over the full input space; all others are sampled.}
 \label{tab:ulp-math}
-\begin{tabular}{lrrrr}
+\begin{tabular}{l r@{}l r@{}l r@{}l r@{}l}
 \toprule
-Arm & \texttt{@rh} & \texttt{@rs} & \texttt{@rd} & \texttt{@rq} \\
+Arm & \multicolumn{2}{c}{\texttt{@rh}} & \multicolumn{2}{c}{\texttt{@rs}} & \multicolumn{2}{c}{\texttt{@rd}} & \multicolumn{2}{c}{\texttt{@rq}} \\
 \midrule
-\texttt{+exp}     & 1.00\textsuperscript{e} & 0.86 & 0.99 & 0.81 \\
-\texttt{+log}     & 0.84\textsuperscript{e} & 0.61 & 0.99 & 0.62 \\
-\texttt{+log-2}   & 1.57\textsuperscript{e} & 0.90 & 1.21 & 0.60 \\
-\texttt{+log-10}  & 1.37\textsuperscript{e} & 1.30 & 1.46 & 1.10 \\
-\texttt{+sin}     & $4.4\times10^{5}$\textsuperscript{e,r} & 0.65 & 0.73 & 0.73 \\
-\texttt{+cos}     & $1.8\times10^{6}$\textsuperscript{e,r} & 0.53 & 0.76 & 0.72 \\
-\texttt{+tan}     & $2.2\times10^{10}$\textsuperscript{e,r} & 9.68 & 0.76 & 1.67 \\
-\texttt{+atan}    & 0.74\textsuperscript{e} & 0.58 & 0.71 & 0.53 \\
-\texttt{+atan2}   & 1.80 & 1.16 & 1.36 & 1.35 \\
-\texttt{+asin}    & 1.01\textsuperscript{e} & 0.85 & 0.84 & 0.77 \\
-\texttt{+acos}    & 1.00\textsuperscript{e} & 0.98 & 0.89 & 0.86 \\
-\texttt{+sqt}     & 0.50\textsuperscript{e} & 0.50 & 0.50 & 0.50 \\
-\texttt{+cbt}     & 6.70\textsuperscript{e,c} & 2.62\textsuperscript{c} & 4.39\textsuperscript{c} & 4.29\textsuperscript{c} \\
-\texttt{+pow}     & 31.0\textsuperscript{c} & 48.0\textsuperscript{c} & 133.7\textsuperscript{c} & 60.7\textsuperscript{c} \\
+\texttt{+exp}     & 1.00 & \textsuperscript{e}   & 0.86  & {} & 0.99  & {} & 0.81 & {} \\
+\texttt{+log}     & 0.84 & \textsuperscript{e}   & 0.61  & {} & 0.99  & {} & 0.62 & {} \\
+\texttt{+log-2}   & 1.57 & \textsuperscript{e}   & 0.90  & {} & 1.21  & {} & 0.60 & {} \\
+\texttt{+log-10}  & 1.37 & \textsuperscript{e}   & 1.30  & {} & 1.46  & {} & 1.10 & {} \\
+\texttt{+sin}     & 0.51 & \textsuperscript{e,f} & 0.65  & {} & 0.73  & {} & 0.73 & {} \\
+\texttt{+cos}     & 0.53 & \textsuperscript{e,f} & 0.53  & {} & 0.76  & {} & 0.72 & {} \\
+\texttt{+tan}     & 1.64 & \textsuperscript{e,f,c} & 0.94  & \textsuperscript{k} & 0.76  & \textsuperscript{k} & 1.67 & \textsuperscript{c} \\
+\texttt{+atan}    & 0.74 & \textsuperscript{e}   & 0.58  & {} & 0.71  & {} & 0.53 & {} \\
+\texttt{+atan2}   & 1.80 & {}                    & 1.16  & {} & 1.36  & {} & 1.35 & {} \\
+\texttt{+asin}    & 1.01 & \textsuperscript{e}   & 0.85  & {} & 0.84  & {} & 0.77 & {} \\
+\texttt{+acos}    & 1.00 & \textsuperscript{e}   & 0.98  & {} & 0.89  & {} & 0.86 & {} \\
+\texttt{+sqt}     & 0.50 & \textsuperscript{e}   & 0.50  & {} & 0.50  & {} & 0.50 & {} \\
+\texttt{+cbt}     & 6.70 & \textsuperscript{c,e} & 2.62  & \textsuperscript{c} & 4.39  & \textsuperscript{c} & 4.29 & \textsuperscript{c} \\
+\texttt{+pow}     & 31.0 & \textsuperscript{c}   & 48.0  & \textsuperscript{c} & 133.7 & \textsuperscript{c} & 60.7 & \textsuperscript{c} \\
 \bottomrule
 \end{tabular}
 \end{table}
@@ -379,69 +388,120 @@ Arm & \texttt{@rh} & \texttt{@rs} & \texttt{@rd} & \texttt{@rq} \\
 \centering
 \caption{Maximum observed \textsc{ulp} error, \texttt{/lib/unum} (2022-standard posits), against an \texttt{mpmath}-checked oracle.  All three widths are tested exhaustively.}
 \label{tab:ulp-unum}
-\begin{tabular}{lrrr}
+\begin{tabular}{l r@{}l r@{}l r@{}l}
 \toprule
-Arm & \texttt{@rpb} & \texttt{@rph} & \texttt{@rps} \\
+Arm & \multicolumn{2}{c}{\texttt{@rpb}} & \multicolumn{2}{c}{\texttt{@rph}} & \multicolumn{2}{c}{\texttt{@rps}} \\
 \midrule
-\texttt{+exp}     & 0 & 0 & 0 \\
-\texttt{+log}     & 0 & 0 & 0 \\
-\texttt{+log-2}   & 0 & 0 & 0 \\
-\texttt{+log-10}  & 0 & 0 & 0 \\
-\texttt{+sin}     & 0 & 0 & 0 \\
-\texttt{+cos}     & 0 & 0 & 0 \\
-\texttt{+tan}     & 0 & 0 & 0 \\
-\texttt{+atan}    & 0 & 0 & 0 \\
-\texttt{+asin}    & 1 & 1 & 3 \\
-\texttt{+acos}    & 1 & 7 & 4 \\
-\texttt{+cbt}     & 1\textsuperscript{n} & 2\textsuperscript{n} & 2\textsuperscript{n} \\
-\texttt{+pow}     & 3\textsuperscript{c} & 4\textsuperscript{c} & 4\textsuperscript{c} \\
-\texttt{+pow-n}   & 2\textsuperscript{c} & 2\textsuperscript{c} & 2\textsuperscript{c} \\
+\texttt{+exp}     & 0 & {} & 0 & {} & 0 & {} \\
+\texttt{+log}     & 0 & {} & 0 & {} & 0 & {} \\
+\texttt{+log-2}   & 0 & {} & 0 & {} & 0 & {} \\
+\texttt{+log-10}  & 0 & {} & 0 & {} & 0 & {} \\
+\texttt{+sin}     & 0 & {} & 0 & {} & 0 & {} \\
+\texttt{+cos}     & 0 & {} & 0 & {} & 0 & {} \\
+\texttt{+tan}     & 0 & {} & 0 & {} & 0 & {} \\
+\texttt{+atan}    & 0 & {} & 0 & {} & 0 & {} \\
+\texttt{+asin}    & 1 & \textsuperscript{c} & 1 & \textsuperscript{c} & 3 & \textsuperscript{c} \\
+\texttt{+acos}    & 1 & \textsuperscript{c} & 7 & \textsuperscript{c} & 4 & \textsuperscript{c} \\
+\texttt{+cbt}     & 1 & \textsuperscript{n} & 2 & \textsuperscript{n} & 2 & \textsuperscript{n} \\
+\texttt{+pow}     & 3 & \textsuperscript{c} & 4 & \textsuperscript{c} & 4 & \textsuperscript{c} \\
+\texttt{+pow-n}   & 2 & \textsuperscript{c} & 2 & \textsuperscript{c} & 2 & \textsuperscript{c} \\
 \bottomrule
 \end{tabular}
 \end{table}
 
-Superscript \textsuperscript{e} marks an exhaustive sweep; all unmarked \texttt{/lib/math} cells are sampled.  Superscript \textsuperscript{c} marks a \emph{composed} arm (\texttt{+pow}, \texttt{+cbt}, and integer-exponent \texttt{+pow-n} beyond the cheap exact cases are built from \texttt{+exp}/\texttt{+log} or repeated multiplication rather than an independently minimax-fit kernel) whose error is inherited from its constituents' chained roundings rather than directly controlled; these are consequently \emph{not} faithfully rounded, in contrast to the paper's earlier blanket framing.  Superscript \textsuperscript{n} marks \texttt{/lib/unum}'s \texttt{+cbt}, which returns \textsc{n}a\textsc{r} for negative inputs (unlike \texttt{/lib/math}'s sign-extraction definition) and so is swept over positive inputs only.  Superscript \textsuperscript{r} marks a genuine, previously undocumented range-reduction limitation: \texttt{@rh}'s trigonometric arms use a single fixed-precision $\pi/2$ reduction constant sized for small arguments, and since reduction error scales with the quotient $x\cdot2/\pi$ rather than the constant's precision alone, error exceeds 1~\textsc{ulp} by $|x|\sim2^{9}$ and grows unbounded beyond it---the same class of limitation \texttt{/lib/math} already documents for extreme arguments at \texttt{@rs}/\texttt{@rd}, arising here at a far smaller threshold because \texttt{@rh} has few mantissa bits to spend on the reduction constant.  A candidate fix mirrors \texttt{/lib/unum}'s own approach (Table~\ref{tab:ulp-unum}, note below): a wider fixed-point reduction constant costs nothing extra given Hoon's arbitrary-precision atoms.  This is filed as a follow-up rather than fixed in this pass.
+\begin{table}[h]
+\centering
+\caption{\texttt{@rh} \texttt{+sin}/\texttt{+cos}/\texttt{+tan}, maximum observed \textsc{ulp} error before the range-reduction fix (Table~\ref{tab:ulp-math} reports the corrected, current values).}
+\label{tab:ulp-before}
+\begin{tabular}{lr}
+\toprule
+Arm & \texttt{@rh}, before fix \\
+\midrule
+\texttt{+sin} & 437,291 \\
+\texttt{+cos} & 1,818,711 \\
+\texttt{+tan} & 2.16 × 10\textsuperscript{10} \\
+\bottomrule
+\end{tabular}
+\end{table}
 
-The headline comparison is that every \texttt{/lib/unum} transcendental with a dedicated, non-composed kernel is \emph{exactly correctly rounded} (0~\textsc{ulp}) at all three tested widths---stronger than \texttt{/lib/math} achieves at any precision, where the best case is faithful rounding around 0.5--1~\textsc{ulp} rather than 0~\textsc{ulp}.  This follows from the same architectural point made in Section~\ref{sec:stack}: unum's arbitrary-precision Hoon atoms let the reduction and kernel arithmetic run at whatever fixed-point width the worst case demands, with no hi/lo-split compromise forced by a fixed hardware register width, whereas \texttt{/lib/math}'s reduction constants are ultimately bounded by what a target precision's own bit width can hold.  \texttt{+tan} in particular was previously only characterized qualitatively as ``faithful (a few \textsc{ulp})''; direct measurement (using the existing but previously unexercised \texttt{tan\_g} oracle helper) shows it is in fact correctly rounded, and that characterization is accordingly tightened here.  The composed arms (\texttt{+pow}, \texttt{+cbt}, and \texttt{+pow-n} beyond small positive exponents) lose this property in both libraries alike, landing in the 1--134~\textsc{ulp} range depending on precision and the number of chained roundings the composition involves---an inherent cost of composition rather than a library-specific weakness.
+The original Chebyshev-based implementation of the \texttt{@rh} transcendental functions had a subtle but catastrophic flaw in its range reduction.  The \texttt{@rh} Chebyshev fits were correct, but the range reduction was performed entirely in half precision, which is insufficient for large arguments.  \texttt{@rh}'s trigonometric arms did quarter-turn range reduction ($q=\mathrm{round}(|x|\cdot\frac{\text{2}}{\pi})=|x|\cdot\frac{\text{4}}{\tau}$, $r=|x|-q\cdot(\frac{\pi}{\text{2}})=|x|-q\cdot(\frac{\tau}{\text{4}})$) entirely in native \texttt{@rh} arithmetic, giving every reduction constant and every intermediate product only an 11-bit-mantissa half-precision value.  Half precision guarantees exact integer representation only up to 2,048; once $q$ exceeds that value ($|x|$ past $\sim$500), $q$'s own rounding error was amplified by the $\frac{\pi}{\text{2}}=\frac{\tau}{\text{4}}$ leading term, injecting a multi-radian error into the reduced remainder.  Table~\ref{tab:ulp-before} reports the resulting damage, measured before the fix: catastrophic, and well within \texttt{@rh}'s ordinary input range (max magnitude $\sim$65,504), not an edge case.  The fix widens to \texttt{@rs} (24-bit mantissa, exact $q$ up to 2\textsuperscript{24}, vastly beyond the dynamic range of \texttt{@rh}) via \texttt{+widen-hs} (exact) and \texttt{+narrow-sh} (correctly rounded), primitives.  These were verified exhaustively against the oracle.
+
+Every \texttt{/lib/unum} transcendental with a dedicated, non-composed kernel is exactly correctly rounded (0~\textsc{ulp}) at all three tested widths, a stronger guarantee than the \textsc{ieee} 754 \texttt{/lib/math} achieves at any precision, where the best case is faithful rounding around 0.5--1~\textsc{ulp} rather than 0~\textsc{ulp}.  The composed arms (\texttt{+pow}, \texttt{+cbt}, and \texttt{+pow-n} beyond small positive exponents) lose this property in both libraries alike, landing in the 1--134~\textsc{ulp} range depending on precision and the number of chained roundings the composition involves---an inherent cost of composition rather than a library-specific weakness.
 
 \subsection{The price of determinism}
 \label{sec:price}
 
-The third field of benchmarking measures the overhead of the determinism guarantee relative to a conventional, nondeterministic, hardware \textsc{blas}. We report SoftBLAS against Apple's Accelerate framework---the true zero-install stock \textsc{blas} on this host, dispatching to Apple Silicon's \textsc{amx} matrix coprocessor---for \texttt{sgemm} and \texttt{dgemm} on the same machine used for Tables~\ref{tab:jet} and~\ref{tab:unum} (single-threaded, \texttt{VECLIB\_MAXIMUM\allowbreak\_THREADS=1} to remove Accelerate's automatic multithreading as a confound).\footnote{Full methodology, raw per-run output, and the harness (adapted from \texttt{SoftBLAS}'s own \texttt{benchmarking/} directory) are at \texttt{benchmark/results/2026-07-03/softblas-vs-native/}.} We expect SoftBLAS to be slower; here we quantify \emph{how much}, and how that cost scales.
+The third field of benchmarking measures the overhead of the determinism guarantee relative to a conventional, nondeterministic, hardware \textsc{blas}.  We report SoftBLAS against Apple's Accelerate framework---a stock \textsc{blas} on macOS which dispatches to Apple Silicon's \textsc{amx} matrix coprocessor---for \texttt{sgemm} and \texttt{dgemm} (single-threaded to remove Accelerate's automatic multithreading as a confound).  We expect software-defined SoftBLAS to be slower; here we quantify how that cost scales.  The results are summarized in Table~\ref{tab:price} and Figure~\ref{fig:price}.
 
-\begin{landscape}
-\begin{table}[h]
+\textsuperscript{*}At $n\leq\text{20}$ Accelerate's own run-to-run standard deviation is comparable to its mean, so the reported slowdown there is noise-dominated; the trend is reliable and monotonic above $n=\text{30}$ (SoftBLAS's timings are stable throughout since a fixed triple loop has no comparable startup-dominated regime).
+
+Determinism does not levy a fixed tax, but its cost grows with problem size, from single digits at $n=\text{10}$ to nearly four orders of magnitude by $n=\text{1,000}$ (\texttt{sgemm}) or over three orders of magnitude (\texttt{dgemm}).  SoftBLAS's triple-nested loop over SoftFloat calls is a clean $O(n^3)$ throughout the range tested (doubling $n$ consistently multiplies time by $\sim\!8\times$), with no cache blocking or vectorization---each scalar multiply-add pays a full software floating-point call.\footnote{Other matrix multiplication algorithms, such as Strassen's algorithm, can reduce the asymptotic complexity, but they are not used in this context.}  Accelerate is sub-cubic through the moderate range (cache blocking and \textsc{simd}/\textsc{amx} dispatch absorb work that would otherwise scale as $n^3$) before trending back toward cubic by $n=\text{1,000}$.  In throughput terms, SoftBLAS delivers roughly 0.12~\textsc{gflop/s} at $n=\text{1,000}$ regardless of precision---consistent with SoftFloat call overhead, not memory bandwidth, being the bottleneck---against Accelerate's approximately 1,477~\textsc{gflop}/s (\texttt{sgemm}) and 401~\textsc{gflop}/s (\texttt{dgemm}), the latter gap itself illustrating that Accelerate's single-precision path better exploits the \textsc{amx} unit's native format.
+
+This sharply demonstrates a quantitative trade-off between determinism and performance introduced in Section~\ref{sec:stack}: SoftBLAS is not merely ``slower,'' but slower by a margin that widens with the problem sizes---large dense linear algebra---where \textsc{blas} exists to be fast in the first place.  A deterministic numerical stack should budget accordingly.  A software \textsc{blas} that never touches a hardware floating-point instruction cannot reach a coprocessor-backed \textsc{blas}'s throughput, only close the distance to it, which argues in favor of new paradigms for deterministic numerical computing that can leverage hardware acceleration without sacrificing reproducibility.
+
+\begin{sidewaystable}[tp]
 \centering
 \caption{\texttt{sgemm}/\texttt{dgemm} mean per-call time, SoftBLAS vs.\ Apple Accelerate, single-threaded, Apple M4 Max.  $n$ is the (square) matrix dimension.}
 \label{tab:price}
-\begin{tabular}{rrrrrrr}
+\begin{tabular}{r@{}lrrr|rrr}
 \toprule
-$n$ & SoftBLAS \texttt{sgemm} & Accelerate \texttt{sgemm} & slowdown & SoftBLAS \texttt{dgemm} & Accelerate \texttt{dgemm} & slowdown \\
+$n$ & & SoftBLAS \texttt{sgemm} & Accelerate \texttt{sgemm} & slowdown & SoftBLAS \texttt{dgemm} & Accelerate \texttt{dgemm} & slowdown \\
 \midrule
-10   & 21.9 µs  & 7.3 µs   & 3.0×      & 20.8 µs  & 4.7 µs   & 4.4×  \\
-20\textsuperscript{*}   & 160 µs   & 9.0 µs   & 17.7×     & 151 µs   & 1.9 µs   & 80.0× \\
-30\textsuperscript{*}   & 521 µs   & 0.79 µs  & 661.5×    & 496 µs   & 1.4 µs   & 354.1× \\
-40   & 1.20 ms  & 1.4 µs   & 873.4×    & 1.16 ms  & 2.3 µs   & 496.4× \\
-50   & 2.27 ms  & 1.9 µs   & 1202.0×   & 2.22 ms  & 4.1 µs   & 545.7× \\
-75   & 7.44 ms  & 3.2 µs   & 2321.5×   & 7.25 ms  & 7.1 µs   & 1020.4× \\
-100  & 17.3 ms  & 5.8 µs   & 2970.0×   & 17.8 ms  & 13.9 µs  & 1282.3× \\
-200  & 133 ms   & 22.5 µs  & 5920.8×   & 135 ms   & 57.9 µs  & 2342.1× \\
-500  & 2.02 s   & 203 µs   & 9946.7×   & 2.02 s   & 675 µs   & 3000.4× \\
-1000 & 16.05 s  & 1.35 ms  & 11853.3×  & 16.25 s  & 4.99 ms  & 3256.8× \\
+10  & {} & 21.9 µs  & 7.3 µs   & 3.0×      & 20.8 µs  & 4.7 µs   & 4.4×  \\
+20 & \textsuperscript{*}   & 160 µs   & 9.0 µs   & 18×     & 151 µs   & 1.9 µs   & 80.0× \\
+30 & \textsuperscript{*}   & 521 µs   & 0.79 µs  & 662×    & 496 µs & 1.4 µs   & 354× \\
+40 & {} & 1.20 ms  & 1.4 µs   & 873×    & 1.16 ms  & 2.3 µs   & 496× \\
+50 & {} & 2.27 ms  & 1.9 µs   & 1,202×   & 2.22 ms  & 4.1 µs   & 545.7× \\
+75 & {} & 7.44 ms  & 3.2 µs   & 2,322×   & 7.25 ms  & 7.1 µs   & 1,020.4× \\
+100 & {} & 17.3 ms  & 5.8 µs   & 2,970×   & 17.8 ms  & 13.9 µs  & 1,282.3× \\
+200 & {} & 133 ms   & 22.5 µs  & 5,921×   & 135 ms   & 57.9 µs  & 2,342× \\
+500  & {} & 2.02 s   & 203 µs   & 9,947×   & 2.02 s   & 675 µs   & 3,000× \\
+1000 & {} & 16.05 s  & 1.35 ms  & 11,853×  & 16.25 s  & 4.99 ms  & 3,257× \\
 \bottomrule
 \end{tabular}
-\end{table}
-\end{landscape}
+\end{sidewaystable}
 
-\textsuperscript{*}At $n\leq20$ Accelerate's own run-to-run standard deviation is comparable to its mean, so the reported slowdown there is noise-dominated; the trend is reliable and cleanly monotonic from $n=30$ onward (SoftBLAS's own timings, by contrast, are stable throughout, since a fixed triple-loop has no comparable startup-dominated regime).
-
-The headline result is that the price of determinism is \emph{not} a fixed tax: it grows with problem size, from single digits at $n=10$ to nearly four orders of magnitude by $n=1000$ (\texttt{sgemm}) or over three orders of magnitude (\texttt{dgemm}).  SoftBLAS's triple-nested loop over SoftFloat calls is a clean $O(n^3)$ throughout the range tested (doubling $n$ consistently multiplies time by $\sim\!8\times$), with no cache blocking or vectorization---each scalar multiply-add pays a full software floating-point call.  Accelerate is sub-cubic through the moderate range (cache blocking and \textsc{simd}/\textsc{amx} dispatch absorb work that would otherwise scale as $n^3$) before trending back toward cubic by $n=1000$.  In throughput terms, SoftBLAS delivers roughly 0.12~\textsc{gflop/s} at $n=1000$ regardless of precision---consistent with SoftFloat call overhead, not memory bandwidth, being the bottleneck---against Accelerate's approximately 1,477~\textsc{gflop/s} (\texttt{sgemm}) and 401~\textsc{gflop/s} (\texttt{dgemm}), the latter gap itself illustrating that Accelerate's single-precision path better exploits the \textsc{amx} unit's native format.
-
-This is the sharpest quantitative expression in this article of the determinism/performance trade-off introduced in Section~\ref{sec:stack}: SoftBLAS is not merely ``slower,'' but slower by a margin that widens with the very problem sizes---large dense linear algebra---where \textsc{blas} exists to be fast in the first place.  A jetted numerical stack that needs bit-reproducible \texttt{gemm} at meaningful scale should budget accordingly, and this is precisely the gap dense-linear-algebra jet optimization (Section~\ref{sec:price}, Future Work) is positioned to narrow, not eliminate---a software \textsc{blas} that never touches a hardware floating-point instruction cannot, by construction, reach a coprocessor-backed \textsc{blas}'s throughput, only close the distance to it.
+\begin{figure}[h]
+\centering
+\begin{tikzpicture}
+\begin{loglogaxis}[
+    width=1.0\linewidth,
+    height=0.68\linewidth,
+    xlabel={matrix dimension $n$},
+    ylabel={mean per-call time (s)},
+    legend pos=north west,
+    legend style={font=\footnotesize},
+    grid=both,
+    minor grid style={gray!20},
+    major grid style={gray!50},
+]
+\addplot[mark=*, color=black, thick] coordinates {
+    (10,21.9e-6) (20,160e-6) (30,521e-6) (40,1.20e-3) (50,2.27e-3)
+    (75,7.44e-3) (100,17.3e-3) (200,133e-3) (500,2.02) (1000,16.05)
+};
+\addlegendentry{SoftBLAS \texttt{sgemm}}
+\addplot[mark=o, color=black, thick, dashed] coordinates {
+    (10,20.8e-6) (20,151e-6) (30,496e-6) (40,1.16e-3) (50,2.22e-3)
+    (75,7.25e-3) (100,17.8e-3) (200,135e-3) (500,2.02) (1000,16.25)
+};
+\addlegendentry{SoftBLAS \texttt{dgemm}}
+\addplot[mark=triangle, color=black!60!white, thick] coordinates {
+    (10,7.3e-6) (20,9.0e-6) (30,0.79e-6) (40,1.4e-6) (50,1.9e-6)
+    (75,3.2e-6) (100,5.8e-6) (200,22.5e-6) (500,203e-6) (1000,1.35e-3)
+};
+\addlegendentry{Accelerate \texttt{sgemm}}
+\addplot[mark=square*, color=black!60!white, thick, dashed] coordinates {
+    (10,4.7e-6) (20,1.9e-6) (30,1.4e-6) (40,2.3e-6) (50,4.1e-6)
+    (75,7.1e-6) (100,13.9e-6) (200,57.9e-6) (500,675e-6) (1000,4.99e-3)
+};
+\addlegendentry{Accelerate \texttt{dgemm}}
+\end{loglogaxis}
+\end{tikzpicture}
+\caption{\texttt{sgemm}/\texttt{dgemm} mean per-call time vs.\ matrix dimension $n$, log--log, SoftBLAS vs.\ Apple Accelerate (data from Table~\ref{tab:price}).  SoftBLAS's clean $O(n^3)$ scaling appears as a straight line of slope 3 throughout (\texttt{sgemm} and \texttt{dgemm} nearly coincide); Accelerate's sub-cubic scaling at moderate $n$ visibly bends below that trend before steepening again near $n=\text{1,000}$---the widening vertical gap between the two families is the determinism tax growing with problem size.  The Accelerate points at $n\leq\text{30}$ are noise-dominated (Table~\ref{tab:price}, note~*), hence the irregular dip rather than a smooth curve at small $n$.}
+\label{fig:price}
+\end{figure}
 
 \section{Future Work}
-
-We have focused more than our taste on \textsc{ieee} 754 given its ongoing dominance in numerical computation, but we anticipate the libraries beyond \texttt{/lib/math} to grow in relative importance in the future.
 
 \sloppy
 The complex-valued SoftBLAS routines are in progress and will complete the Level 1--3 coverage.  Quire operations in \texttt{/lib/unum} are implemented within the generic posit core but are not yet surfaced as callable top-level arms; exposing them is a prerequisite both for user access and for routing them through the verification harness.  The unum specification also defines valids, which are arithmetic intervals which have not yet seen widespread adoption.
@@ -456,5 +516,4 @@ Urbit as a deterministic state machine cannot treat numerical determinism or bit
 
 \selectlanguage{USenglish}
 \printbibliography
-% TODO check all references for reality
 \end{document}
