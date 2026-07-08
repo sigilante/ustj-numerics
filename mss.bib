@@ -462,7 +462,7 @@
 @article{lawson1979blas,
   author  = {Lawson, C. L. and Hanson, R. J. and Kincaid, D. R. and Krogh, F. T.},
   title   = {Basic Linear Algebra Subprograms for {Fortran} Usage},
-  journal = {ACM Transactions on Mathematical Software},
+  journal = {\ssc{acm} Transactions on Mathematical Software},
   volume  = {5},
   number  = {3},
   pages   = {308--323},
@@ -496,13 +496,13 @@
 @manual{ieee754-2019,
   title        = {{\ssc{ieee}} Standard for Floating-Point Arithmetic},
   organization = {\ssc{ieee}},
-  number       = {\ssc{ieee} Std 754-2019},
+  number       = {\textsc{ieee} Std 754-2019},
   year         = {2019},
   doi          = {10.1109/IEEESTD.2019.8766229}
 }
 
 @manual{positstd2022,
-  author       = {Posit Working Group},
+  author       = {{Posit Working Group}},
   title        = {Standard for Posit Arithmetic (2022)},
   organization = {Posit Working Group},
   year         = {2022},
@@ -520,14 +520,14 @@
   doi     = {10.14529/jsfi170206}
 }
 
-@misc{hauser_softfloat,
+@software{hauser_softfloat,
   author       = {Hauser, John R.},
   title        = {{Berkeley SoftFloat}, Release 3e},
   howpublished = {\url{http://www.jhauser.us/arithmetic/SoftFloat.html}},
   year         = {2018}
 }
 
-@misc{leong_softposit,
+@software{leong_softposit,
   author       = {Leong, S. H. (Cerlane)},
   title        = {{SoftPosit}: A Software Implementation of Posit Arithmetic},
   howpublished = {\url{https://gitlab.com/cerlane/SoftPosit}},
@@ -578,10 +578,10 @@
   doi       = {10.1145/3453483.3454049}
 }
 
-@misc{coremath,
-  author       = {{The \textsc{core-math} Project}},
+@software{coremath,
+  author       = {{\textsc{core-math} Project}},
   title        = {{\textsc{core-math}}: Correctly Rounded Mathematical Functions},
-  howpublished = {\url{https://core-math.gitlabpages.inria.fr/}},
+  url          = {https://core-math.gitlabpages.inria.fr/},
   year         = {2022}
 }
 
@@ -592,7 +592,7 @@
   year      = {1980}
 }
 
-@misc{intel_cnr,
+@software{intel_cnr,
   author       = {{Intel Corporation}},
   title        = {Conditional Numerical Reproducibility ({\ssc{cnr}}) in
                   {Intel oneAPI Math Kernel Library}},
@@ -600,11 +600,18 @@
   year         = {2023}
 }
 
-@misc{urbit_softblas,
-  author       = {{The Urbit Foundation}},
+@software{urbit_softblas,
+  author       = {{Urbit Foundation}},
   title        = {{SoftBLAS}: Software-Defined {\ssc{blas}} for Deterministic Jetting},
-  howpublished = {\url{https://github.com/urbit/SoftBLAS}},
+  url          = {https://github.com/urbit/SoftBLAS},
   year         = {2024}
+}
+
+@software{urbit_softunum,
+  author       = {N. E. Davis \patp{lagrev-nocfep}},
+  title        = {{SoftUnum}: Software-Defined Universal Number Library for Deterministic Jetting},
+  url          = {https://github.com/sigilante/SoftUnum},
+  year         = {2026}
 }
 
 @article{Davis2024,
@@ -642,7 +649,7 @@ doi = {10.1111/j.2153-3490.1950.tb00336.x},
 url = {https://doi.org/10.1111/j.2153-3490.1950.tb00336.x},
 }
 
-@Book{MullerEtAl2018,
+@book{MullerEtAl2018,
   title        = {Handbook of Floating-Point Arithmetic, 2nd edition},
   author    = {Muller, Jean-Michel and Brunie, Nicolas and de Dinechin, Florent and Jeannerod, Claude-Pierre and Joldes, Mioara and
           Lef{\`e}vre, Vincent and Melquiond, Guillaume and Revol,
