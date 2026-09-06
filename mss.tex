@@ -13,7 +13,7 @@
 
 \newcommand{\authorname}{N.\ E.\ Davis}
 \newcommand{\authorpatp}{\patp{lagrev-nocfep}}
-\newcommand{\affiliation}{ZeroAttest, Groundwire Foundation}
+\newcommand{\affiliation}{ZeroAttest}
 
 %  Make first page footer:
 \fancypagestyle{firststyle}{%
@@ -21,8 +21,8 @@
 \fancyhead{}
 \fancyfoot[L]{{\footnotesize
               %% We toggle between these:
-              Manuscript submitted for review.\\
-              % {\it Urbit Systems Technical Journal} I:1 (2024):  1–3. \\
+              % Manuscript submitted for review.\\
+              {\it Urbit Systems Technical Journal} III:2 (2026):  59–86. \\
               ~ \\
               Address author correspondence to \authorpatp.
               }}
@@ -49,7 +49,7 @@ Urbit's deterministic functional architecture requires that all computations be 
 
 % We will adjust page numbering in final editing.
 \pagenumbering{arabic}
-\setcounter{page}{1}
+\setcounter{page}{59}
 
 \tableofcontents
 
@@ -57,15 +57,15 @@ Urbit's deterministic functional architecture requires that all computations be 
 
 Urbit is a deterministic functional operating system whose state is a pure function of its event log \citep{Whitepaper}.  An event log replay must recover the state exactly, on any conforming runtime, indefinitely.  This is not a performance nicety; it is the property that makes the system auditable, upgradeable, and peer-verifiable.  Determinism is a load-bearing property all the way down.
 
-Numerical computing is one of the most slippery places for determinism to leak through its abstractions.  Standard \textsc{ieee}~754 floating-point arithmetic is not associative, as an example, but the situation is much more dire.  The \textsc{ieee}~754 standard~\citep{ieee754-2019} specifies the result of each individual operation under a given rounding mode, but a real numerical program is a composition of operations, and the standard says little about composition.  A fused multiply-add computes $a\cdot b + c$ with a single rounding where two separate operations would round twice; a vectorized dot product sums partial results in an order chosen by the hardware; and a threaded \textsc{blas} reassociates a reduction differently depending on how many cores happened to be available.\footnote{Urbit computing is single-threaded which removes one possible source of nondeterminism.}  Each of these is standards-conformant while none is deterministic across hosts.
+Numerical computing is one of the most slippery places for determinism to leak through its abstractions.  Standard \textsc{ieee}~754 floating-point arithmetic is not associative, as an example, but the situation is much more dire.  The \textsc{ieee}~754 standard~(\citeyear{ieee754-2019}) specifies the result of each individual operation under a given rounding mode, but a real numerical program is a composition of operations, and the standard says little about composition.  A fused multiply-add computes $a\cdot b + c$ with a single rounding where two separate operations would round twice; a vectorized dot product sums partial results in an order chosen by the hardware; and a threaded \textsc{blas} reassociates a reduction differently depending on how many cores happened to be available.\footnote{Urbit computing is single-threaded which removes one possible source of nondeterminism.}  Each of these is standards-conformant while none is deterministic across hosts.
 
-The treatment of floating-point representation in Hoon by \citet{Davis2024} established the foundation for Urbit's deterministic numerical computing stack.  This article expounds both the state of the art of Urbit's basic numerical packaging and the next layer:  dense linear algebra, where the nondeterminism of conventional \textsc{blas} and \textsc{ieee} 754 floating-point mathematics are acute and consequential.  We introduce SoftBLAS,\footnote{\href{https://github.com/urbit/SoftBLAS}{\texttt{urbit/SoftBLAS}} \citep{urbit_softblas}.} a software-defined \textsc{blas} package; SoftUnum,\footnote{\href{https://github.com/sigilante/SoftUnum}{\texttt{sigilante/SoftUnum}} \citep{urbit_softunum}.} a software-defined universal number (unum) package; and other components of a C-based numerical stack that is deterministic and compliant with the Hoon specification.  We further describe the ``ray'' data structure which facilitates the type dispatch for different numeric representations while preserving identity between Nock-specified atoms and C-recognized arrays.
+The treatment of floating-point representation in Hoon by \citet{Davis2024} established the foundation for Urbit's deterministic numerical computing stack.  This article expounds both the state of the art of Urbit's basic numerical packaging and the next layer:  dense linear algebra, where the nondeterminism of conventional \textsc{blas} and \textsc{ieee} 754 floating-point mathematics are acute and consequential.  We introduce SoftBLAS,\footnote{\href{https://github.com/urbit/SoftBLAS}{\texttt{urbit/SoftBLAS}} \citep{urbit_softblas}.} a software-defined \textsc{blas} package; SoftUnum,\footnote{\href{https://github.com/sigilante/SoftUnum}{\texttt{sigilante/SoftUnum}} (\patp{lagrev-nocfep}, 2026b).\nocite{urbit_softunum}} a software-defined universal number (unum) package; and other components of a C-based numerical stack that is deterministic and compliant with the Hoon specification.  We further describe the ``ray'' data structure which facilitates the type dispatch for different numeric representations while preserving identity between Nock-specified atoms and C-recognized arrays.
 
-The central conceit is architectural.  In conventional high-performance computing, C (or Fortran) takes primacy:  the C implementation is what runs, and correctness is in some sense whatever the C does.\footnote{Verification and validation apply, of course.}  Urbit inverts this relationship.  The Hoon/Nock \textsc{isa} implementation is the specification; the C jet is an optimization that is \emph{obligated} to produce the specification's exact output for every input, and should be discarded silently whenever it cannot.  Determinism then is not merely a testable, desirable property, but a mandate the Nock-side architecture cannot express the violation of.
+The central conceit is architectural.  In conventional high-performance computing, C (or Fortran) takes primacy:  the C implementation is what runs, and correctness is in some sense whatever the C does.\footnote{Verification and validation apply, of course.}  Urbit inverts this relationship.  The Hoon/Nock \textsc{isa} implementation is the specification; the C jet is an optimization that is \emph{obligated} to produce the specification's exact output for every input, and should be discarded silently whenever it cannot.  Determinism then is not merely a testable desideratum but a mandate whose violation the Nock-side architecture cannot express.
 
 \section{Background and Literature}
 
-Although the solution of partial differential equations is one of the oldest significant applications of computing,\footnote{\citet{Charney1950}.} no standard library emerged for decades---unsurprising given the churn of hardware architectures, the diversity of numerical methods, the lack of a common interface definition, the rapid evolution of programming languages, and the active development of linear algebraic algorithms.\footnote{Even the size of a byte took decades to standardize.}  Given that situation, rigorous bitwise determinism was a concern of vanishingly small importance, whether cross-platform or even for serial runs on the same machine.  However, over time the advent of high-performance computing, the emergence of \textsc{blas} as a pseudo-standard, and the increasing importance of reproducibility in numerical computing have made determinism both more pressing and more achievable.
+Although the solution of partial differential equations is one of the oldest significant applications of computing \citep{Charney1950}, no standard library emerged for decades---unsurprising given the churn of hardware architectures, the diversity of numerical methods, the lack of a common interface definition, the rapid evolution of programming languages, and the active development of linear algebraic algorithms.\footnote{Even the size of a byte took decades to standardize.}  Given that situation, rigorous bitwise determinism was a concern of vanishingly small importance, whether cross-platform or even for serial runs on the same machine.  However, over time the advent of high-performance computing, the emergence of \textsc{blas} as a pseudo-standard, and the increasing importance of reproducibility in numerical computing have made determinism both more pressing and more achievable.
 
 \subsection{\textsc{blas} as a pseudo-standard}
 
@@ -84,7 +84,7 @@ Cross-host divergence in a \textsc{blas} computation has a small number of recur
 \end{itemize}
 
 \noindent
-\citet{Davis2024} further enumerated other reasons that contemporary floating-point mathematics cannot be considered deterministic even when single-threaded on a particular hardware target and instruction set architecture.
+\citeauthor{Davis2024} further enumerated other reasons that contemporary floating-point mathematics cannot be considered deterministic even when single-threaded on a particular hardware target and instruction set architecture.\footnote{See \patp{lagrev-nocfep}, ``The Desert of the Reals:  Floating-Point Arithmetic on Deterministic Systems,'' \emph{Urbit Systems Technical Journal} volume 1 issue 1, pp.~93--131.}
 
 \subsection{Reproducibility}
 
@@ -126,7 +126,7 @@ is Hoon-normative with optional, independently verifiable C jets.
     \item \texttt{/lib/complex}.  Complex arithmetic over the four \textsc{ieee} 754 precisions, riding on the scalar float layer.  Originally composed by \patp{lagrev-nocfep}.
   \end{enumerate}
   \item \emph{Lagoon (Linear AlGebra in hOON)}.  A rank-$N$ array library (a \texttt{\$ray}) carrying a \texttt{\$kind} field that dispatches to the appropriate arithmetic:  \texttt{\%i754}, \texttt{\%uint}, \texttt{\%int2}, \texttt{\%unum}, \texttt{\%cplx}, \texttt{\%fixp}.  Storage is row-major and identical in memory layout to underlying runtime arrays; the \texttt{\%i754} Level-3 path is jetted through SoftBLAS and the \texttt{\%unum} path is jetted through SoftUnum.  Composed by \patp{lagrev-nocfep} and \patp{mopfel-winrux}.
-  \item  \sloppy\emph{Saloon (Scientific ALgorithms in hOON)}.  Scientific algorithms over Lagoon rays.  Types correspond to the Lagoon field.  Element-wise transcendentals are dispatched through \texttt{/lib/math}, and dense routines such as the Jacobi symmetric eigendecomposition.\footnote{Broadly speaking, Lagoon:NumPy::Saloon:SciPy.}  Composed by \patp{lagrev-nocfep} and \patp{mopfel-winrux}.
+  \item  \sloppy\emph{Saloon (Scientific ALgorithms in hOON)}.  Scientific algorithms over Lagoon rays.  Types correspond to the Lagoon field.  Element-wise transcendentals are dispatched through \texttt{/lib/math}, and dense routines such as the Jacobi symmetric eigendecomposition.\footnote{Broadly speaking, Saloon:SciPy::Lagoon:NumPy.}  Composed by \patp{lagrev-nocfep} and \patp{mopfel-winrux}.
   \item  \emph{Maroon (MAchine leaRning in hOON)}.  An inchoate machine learning library built atop Lagoon and Saloon.
 \end{enumerate}
 
@@ -261,7 +261,7 @@ Aura types have been named after the target width in the cases of complex number
 
 \section{Contributions}
 
-This deterministic numerical stack contributes several properties to the broader discussion of numerical determinism and reproducibility.  Determinism is a structural property of Urbit:  while reproducible floating point is a standing goal of several parties (\citet{demmel2013reproducible}; \citet{intel_cnr}), Urbit contributes a first-class philosophical requirement.\footnote{Jet co-design methodology is treated separately; see \patp{lagrev-nocfep}, pp.~TODO–TODO in this volume, for a companion article.}
+This deterministic numerical stack contributes several properties to the broader discussion of numerical determinism and reproducibility.  Determinism is a structural property of Urbit:  while reproducible floating point is a standing goal of several parties (\citet{demmel2013reproducible}; \citet{intel_cnr}), Urbit contributes a first-class philosophical requirement.\footnote{Jet co-design methodology is treated separately; see \patp{lagrev-nocfep}, forthcoming paper in \ssc{ustj}, for a companion article.}
 
 Although not novel, the library covers a broad range of bit widths and precisions, including half-precision and quadruple-precision, which are not widely supported in other numerical computing libraries.  Likewise we provided faithfully-rounded elementary functions at most precisions and quantify their accuracy.
 
@@ -509,7 +509,7 @@ $n$ & & SoftBLAS \texttt{sgemm} & Accelerate \texttt{sgemm} & slowdown & SoftBLA
 \sloppy
 The complex-valued SoftBLAS routines are in progress and will complete the Level 1--3 coverage.  Quire operations in \texttt{/lib/unum} are implemented within the generic posit core but are not yet surfaced as callable top-level arms; exposing them is a prerequisite both for user access and for routing them through the verification harness.  The unum specification also defines valids, which are arithmetic intervals which have not yet seen widespread adoption.
 
-Saloon will grow in methods adjacent to scientific computing:  conjugate gradient minimization and other optimization algorithms; random number generators; and the like.  The fixed-point library is relatively under\-developed compared to the other arithmetics, and will be expanded to support more general Q-format widths and operations.  More components of the various libraries need to be upgraded to a state-of-the-art Chebyshev basis and benchmarked for performance.
+Saloon will grow in methods adjacent to scientific computing:  conjugate gradient minimization and other optimization algorithms; random number generators; and the like.  The fixed-point library is relatively under\-developed compared to the other arithmetics, and will be expanded to support more general Q-format widths and operations.  More components of the various libraries need to be upgraded to a state-of-the-art Chebyshev basis and benchmarked for performance.\footnote{This work has been staged as of press at \githubpr{urbit/urbit}{7372}.  Furthermore, a random number generation library has been completed for Saloon at \githubpr{urbit/numerics}{76}, as documented in \patp{lagrev-nocfep} (2026a).\nocite{Davis2026}}
 
 Finally, Maroon, the machine learning library, is in its infancy and will be developed to support a range of machine learning algorithms and techniques.  Part of this field of consideration encompasses the utilization of \textsc{gpu} programming for \textsc{llm}-based computing within or adjacent to Urbit.  \textsc{gpu} numerical nondeterminism and host portability presents a challenge of the same order of magnitude as the baseline reproducibility we have tackled over the past several years in this project.  One can envision a ReproCL as a deterministic counterpart to OpenCL, but it is unclear whether sufficient warrant exists to justify the effort as of the mid-2020s.  Heterogeneous compute would be benefitted by the adoption of alternatives to \textsc{ieee} 754 with better guarantees of portability:  not just unums but \texttt{bfloat16} and other newer types may answer the need.
 
